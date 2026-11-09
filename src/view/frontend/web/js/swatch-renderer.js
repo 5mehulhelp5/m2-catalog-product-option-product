@@ -15,7 +15,7 @@ define([
         _init: function ($this, $widget) {
             this._super($this, $widget);
 
-            var self = this;
+            const self = this;
 
             domReady(function() {
                 $('.swatch-opt .swatch-input').on('change', function() {
@@ -37,14 +37,14 @@ define([
         _RenderControls: function($this, $widget) {
             this._super($this, $widget);
 
-            var self = this;
-            var container = this.element;
+            const self = this;
+            const container = this.element;
 
             $.each(self.options.jsonConfig.attributes, function () {
-                var item = this;
+                const item = this;
 
-                var attributeElement = container.find('[data-attribute-code="' + item.code + '"]');
-                var attributeAriaAttribute = attributeElement.find('div');
+                const attributeElement = container.find('[data-attribute-code="' + item.code + '"]');
+                const attributeAriaAttribute = attributeElement.find('div');
 
                 $(attributeAriaAttribute).attr('aria-required', false);
 
@@ -61,7 +61,7 @@ define([
         },
 
         initAttributes: function(isInit) {
-            var self = this;
+            const self = this;
 
             if (! isInit || self.options.jsonConfig.initOptionAttributeMappings) {
                 self.processOptionAttributePreselects();
@@ -75,9 +75,9 @@ define([
         },
 
         _RenderFormInput: function($this, $widget) {
-            var formInputElement = this._super($this, $widget);
+            const formInputElement = this._super($this, $widget);
 
-            var formInput = $(formInputElement);
+            const formInput = $(formInputElement);
             formInput.attr('data-validate', '{required: false}');
             formInput.attr('aria-required', false);
 
@@ -85,15 +85,15 @@ define([
         },
 
         _RenderSwatchSelect: function($this, $widget) {
-            var selectHtml = this._super($this, $widget);
+            let selectHtml = this._super($this, $widget);
 
             if (selectHtml !== '') {
-                var select = $(selectHtml);
+                const select = $(selectHtml);
 
                 select.addClass('catalog-product-option-product-attribute');
 
                 select.children().each(function() {
-                    var option = $(this);
+                    const option = $(this);
 
                     if (option.attr('data-option-id') === undefined) {
                         option.attr('data-option-id', option.attr('option-id'));
@@ -113,12 +113,12 @@ define([
         },
 
         updateSelection: function(element) {
-            var fieldWrapper = element.closest('.field-wrapper');
-            var optionId = fieldWrapper.data('option-id');
+            const fieldWrapper = element.closest('.field-wrapper');
+            const optionId = fieldWrapper.data('option-id');
 
-            var optionValue = fieldWrapper.find('#checkbox_options_' + optionId);
-            var currentProductId = optionValue.val();
-            var productId = this.getProductId();
+            const optionValue = fieldWrapper.find('#checkbox_options_' + optionId);
+            const currentProductId = optionValue.val();
+            const productId = this.getProductId();
 
             if (currentProductId !== productId) {
                 optionValue.prop('checked', false);
@@ -131,7 +131,7 @@ define([
         },
 
         processOptionAttributePreselects: function() {
-            var self = this;
+            const self = this;
 
             console.log(self.options.jsonConfig.optionAttributePreselects);
             console.log(self.options.jsonConfig.attributes);
@@ -139,7 +139,7 @@ define([
                 if (attributeOptionId === 0) {
                     $.each(self.options.jsonConfig.attributes, function(key, attributeData) {
                         if (attributeData.id === attributeId) {
-                            var firstAttributeOption = attributeData.options[0];
+                            const firstAttributeOption = attributeData.options[0];
 
                             self.options.jsonConfig.optionAttributePreselects[attributeId] = firstAttributeOption.id;
                         }
@@ -152,13 +152,13 @@ define([
         },
 
         processOptionAttributeMappings: function(swatchInput) {
-            var self = this;
+            const self = this;
 
-            var productSwatches = $(self.element);
+            const productSwatches = $(self.element);
 
-            var selectedAttribute = swatchInput.parent();
-            var attributeId = parseInt(selectedAttribute.attr('data-attribute-id'));
-            var attributeOptionId = parseInt(selectedAttribute.attr('data-option-selected'));
+            const selectedAttribute = swatchInput.parent();
+            const attributeId = parseInt(selectedAttribute.attr('data-attribute-id'));
+            const attributeOptionId = parseInt(selectedAttribute.attr('data-option-selected'));
 
             if (! attributeId || ! attributeOptionId) {
                 return;
@@ -170,7 +170,7 @@ define([
                         if (parseInt(sourceAttributeOptionId) === attributeOptionId) {
                             $.each(targetAttributeData, function(targetAttributeId, targetAttributeOptionIds) {
                                 $.each(targetAttributeOptionIds, function(key, targetAttributeOptionId) {
-                                    var swatchAttribute = productSwatches.find(
+                                    const swatchAttribute = productSwatches.find(
                                         'div[data-attribute-id=' + targetAttributeId + '] div[data-option-id=' + targetAttributeOptionId + ']');
 
                                     if (swatchAttribute.length > 0) {
@@ -192,13 +192,13 @@ define([
                                             swatchAttribute.click();
                                         }
                                     } else {
-                                        var swatchSelect = productSwatches.find(
+                                        const swatchSelect = productSwatches.find(
                                             '.swatch-attribute[data-attribute-id=' + targetAttributeId + '] select.swatch-select');
 
                                         if (swatchSelect.length > 0) {
                                             swatchSelect.find('option').removeAttr('selected');
 
-                                            var swatchAttributeOption = swatchSelect.find(
+                                            let swatchAttributeOption = swatchSelect.find(
                                                 'option[data-option-id=' + targetAttributeOptionId + ']');
 
                                             if (swatchAttributeOption.length > 0) {
@@ -218,7 +218,7 @@ define([
                                                         swatchAttributeOption.trigger('change');
                                                     }
 
-                                                    var firstEnabledSwatchAttributeOption =
+                                                    const firstEnabledSwatchAttributeOption =
                                                         productSwatches.find('.swatch-option:not([disabled="disabled"]):first');
 
                                                     if (firstEnabledSwatchAttributeOption.length > 0) {
