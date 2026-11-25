@@ -45,7 +45,7 @@ class AbstractTypeTest extends TestCase
         $options = ['5' => $withCode, '6' => $withoutCode];
 
         $helper->method('getProductOption')->willReturnCallback(
-            fn(Product $product, mixed $optionId): ?Option => $options[ $optionId ] ?? null
+            fn(Product $product, mixed $id): ?Option => is_string($id) ? $options[ $id ] ?? null : null
         );
         $helper->method('getSelectedProduct')->willReturnCallback(
             fn(Option $option, mixed $value): ?Product => $value === '15' ? $selectedProduct : null
