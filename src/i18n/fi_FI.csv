@@ -1,0 +1,7 @@
+"Attribute Option Mapping (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)", "Määritevaihtoehtojen yhdistäminen (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)"
+"Attribute Option Preselect", "Määritevaihtoehtojen esivalinta"
+"Product", "Tuote"
+"Product Code", "Tuotekoodi"
+"The selected product of the option ""%1"" is not available.", "Vaihtoehdon ""%1"" valittu tuote ei ole saatavilla."
+"Unattached", "Ei liitetty"
+"We can't add the product to the cart because of an option validation issue.", "Tuotetta ei voi lisätä ostoskoriin vaihtoehtojen tarkistuksessa tapahtuneen virheen vuoksi."

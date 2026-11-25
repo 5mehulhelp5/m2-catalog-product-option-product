@@ -1,0 +1,7 @@
+"Attribute Option Mapping (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)", "Tilknytning af attributmuligheder (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)"
+"Attribute Option Preselect", "Forvalg af attributmuligheder"
+"Product", "Produkt"
+"Product Code", "Produktkode"
+"The selected product of the option ""%1"" is not available.", "Det valgte produkt for muligheden ""%1"" er ikke tilgængeligt."
+"Unattached", "Ikke tilknyttet"
+"We can't add the product to the cart because of an option validation issue.", "Produktet kan ikke lægges i kurven på grund af en fejl ved valideringen af mulighederne."

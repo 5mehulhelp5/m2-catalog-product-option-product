@@ -2,51 +2,63 @@
 
 declare(strict_types=1);
 
+/**
+ * @author      Andreas Knollmann
+ * @copyright   Copyright (c) 2014-2026 Softwareentwicklung Andreas Knollmann
+ * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ */
+
 namespace Infrangible\CatalogProductOptionProduct\Plugin\Catalog\Model\Product;
 
 use Infrangible\CatalogProductOptionProduct\Helper\Data;
 
 /**
- * @author      Andreas Knollmann
- * @copyright   2014-2025 Softwareentwicklung Andreas Knollmann
- * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ * Options with a product of saved products return the price of the option as price and regular price.
  */
 class Option
 {
-    /** @var Data */
-    protected $helper;
-
-    public function __construct(Data $helper)
+    /**
+     * @param Data $helper
+     */
+    public function __construct(protected Data $helper)
     {
-        $this->helper = $helper;
     }
 
     /**
-     * @throws \Exception
+     * Returns the price of the option.
+     *
+     * @param \Magento\Catalog\Model\Product\Option $subject
+     * @param mixed $result
+     *
+     * @return mixed
      */
-    public function aroundGetPrice(
-        \Magento\Catalog\Model\Product\Option $subject,
-        callable $proceed,
-        $flag = false
-    ) {
-        if ($subject->getType() === 'product' && $subject->getProductId() && $subject->getOptionId()) {
-            return $this->helper->getOptionPrice($subject);
-        }
-
-        return $proceed($flag);
+    public function afterGetPrice(\Magento\Catalog\Model\Product\Option $subject, mixed $result): mixed
+    {
+        return $this->isSavedProductOption($subject) ? $this->helper->getOptionPrice($subject) : $result;
     }
 
     /**
-     * @throws \Exception
+     * Returns the price of the option.
+     *
+     * @param \Magento\Catalog\Model\Product\Option $subject
+     * @param mixed $result
+     *
+     * @return mixed
      */
-    public function aroundGetRegularPrice(
-        \Magento\Catalog\Model\Product\Option $subject,
-        callable $proceed
-    ) {
-        if ($subject->getType() === 'product' && $subject->getProductId() && $subject->getOptionId()) {
-            return $this->helper->getOptionPrice($subject);
-        }
+    public function afterGetRegularPrice(\Magento\Catalog\Model\Product\Option $subject, mixed $result): mixed
+    {
+        return $this->isSavedProductOption($subject) ? $this->helper->getOptionPrice($subject) : $result;
+    }
 
-        return $proceed();
+    /**
+     * Checks if the option has a product and belongs to a saved product.
+     *
+     * @param \Magento\Catalog\Model\Product\Option $option
+     *
+     * @return bool
+     */
+    private function isSavedProductOption(\Magento\Catalog\Model\Product\Option $option): bool
+    {
+        return $this->helper->isProductOption($option) && $option->getProductId() && $option->getOptionId();
     }
 }

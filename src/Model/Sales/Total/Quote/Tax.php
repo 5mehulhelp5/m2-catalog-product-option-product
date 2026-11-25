@@ -2,371 +2,155 @@
 
 declare(strict_types=1);
 
+/**
+ * @author      Andreas Knollmann
+ * @copyright   Copyright (c) 2014-2026 Softwareentwicklung Andreas Knollmann
+ * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ */
+
 namespace Infrangible\CatalogProductOptionProduct\Model\Sales\Total\Quote;
 
-use Infrangible\CatalogProductOptionProduct\Helper\Data;
-use Infrangible\Core\Helper\Product;
-use Magento\ConfigurableProduct\Model\Product\Type\Configurable;
-use Magento\Customer\Api\AccountManagementInterface;
-use Magento\Customer\Api\Data\AddressInterfaceFactory;
-use Magento\Customer\Api\Data\RegionInterfaceFactory;
+use FeWeDev\Base\Variables;
 use Magento\Framework\DataObject;
-use Magento\Framework\Event\ManagerInterface;
-use Magento\Framework\Pricing\PriceCurrencyInterface;
 use Magento\Quote\Api\Data\ShippingAssignmentInterface;
 use Magento\Quote\Model\Quote;
 use Magento\Quote\Model\Quote\Address\Total;
-use Magento\Quote\Model\Quote\Item;
+use Magento\Quote\Model\Quote\Address\Total\AbstractTotal;
 use Magento\Quote\Model\Quote\Item\AbstractItem;
-use Magento\Tax\Api\Data\QuoteDetailsInterfaceFactory;
-use Magento\Tax\Api\Data\QuoteDetailsItemExtensionInterfaceFactory;
-use Magento\Tax\Api\Data\QuoteDetailsItemInterfaceFactory;
-use Magento\Tax\Api\Data\TaxClassKeyInterface;
-use Magento\Tax\Api\Data\TaxClassKeyInterfaceFactory;
-use Magento\Tax\Api\TaxCalculationInterface;
-use Magento\Tax\Model\Config;
 use Magento\Tax\Model\Sales\Total\Quote\CommonTaxCollector;
 
 /**
- * @author      Andreas Knollmann
- * @copyright   2014-2025 Softwareentwicklung Andreas Knollmann
- * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ * Adds the prices of the products of the selected unattached options to the subtotal and the cart items.
+ *
+ * The prices are those that Magento's tax collector calculated for the associated taxables (see "AssociatedTaxable"),
+ * they are added to the prices, row totals and tax amounts of the cart items. The tax itself is already in the tax of
+ * the quote.
  */
-class Tax extends CommonTaxCollector
+class Tax extends AbstractTotal
 {
-    /** @var Data */
-    protected $helper;
-
-    /** @var Product */
-    protected $productHelper;
-
-    /** @var ManagerInterface */
-    protected $eventManager;
-
-    /** @var PriceCurrencyInterface */
-    protected $priceCurrency;
-
-    public function __construct(
-        Config $taxConfig,
-        TaxCalculationInterface $taxCalculationService,
-        QuoteDetailsInterfaceFactory $quoteDetailsDataObjectFactory,
-        QuoteDetailsItemInterfaceFactory $quoteDetailsItemDataObjectFactory,
-        TaxClassKeyInterfaceFactory $taxClassKeyDataObjectFactory,
-        AddressInterfaceFactory $customerAddressFactory,
-        RegionInterfaceFactory $customerAddressRegionFactory,
-        Data $helper,
-        Product $productHelper,
-        ManagerInterface $eventManager,
-        PriceCurrencyInterface $priceCurrency,
-        \Magento\Tax\Helper\Data $taxHelper = null,
-        QuoteDetailsItemExtensionInterfaceFactory $quoteDetailsItemExtensionInterfaceFactory = null,
-        ?AccountManagementInterface $customerAccountManagement = null
-    ) {
-        parent::__construct(
-            $taxConfig,
-            $taxCalculationService,
-            $quoteDetailsDataObjectFactory,
-            $quoteDetailsItemDataObjectFactory,
-            $taxClassKeyDataObjectFactory,
-            $customerAddressFactory,
-            $customerAddressRegionFactory,
-            $taxHelper,
-            $quoteDetailsItemExtensionInterfaceFactory,
-            $customerAccountManagement
-        );
-
-        $this->helper = $helper;
-        $this->productHelper = $productHelper;
-        $this->eventManager = $eventManager;
-        $this->priceCurrency = $priceCurrency;
+    /**
+     * @param Variables $variables
+     */
+    public function __construct(protected Variables $variables)
+    {
     }
 
     /**
-     * @throws \Exception
+     * Adds the prices.
+     *
+     * @param Quote $quote
+     * @param ShippingAssignmentInterface $shippingAssignment
+     * @param Total $total
+     *
+     * @return $this
      */
-    public function collect(
-        Quote $quote,
-        ShippingAssignmentInterface $shippingAssignment,
-        Total $total
-    ): Tax {
-        $items = $shippingAssignment->getItems();
+    public function collect(Quote $quote, ShippingAssignmentInterface $shippingAssignment, Total $total): static
+    {
+        parent::collect($quote, $shippingAssignment, $total);
 
-        if (! $items) {
-            return $this;
-        }
+        $details = $this->getTaxableDetails($total);
 
-        $store = $quote->getStore();
+        foreach ($shippingAssignment->getItems() as $item) {
+            if (! $item instanceof AbstractItem || $item->getParentItem() !== null) {
+                continue;
+            }
 
-        $priceIncludesTax = $this->_config->priceIncludesTax($store);
+            $itemDetails = $details[ $this->variables->stringValueOrDefault($item->getData('tax_calculation_item_id')) ]
+                ?? [];
 
-        $itemDataObjects = $this->mapItems(
-            $shippingAssignment,
-            $priceIncludesTax,
-            false
-        );
-
-        $quoteDetails = $this->prepareQuoteDetails(
-            $shippingAssignment,
-            $itemDataObjects
-        );
-
-        $taxDetails = $this->taxCalculationService->calculateTax(
-            $quoteDetails,
-            $store->getStoreId()
-        );
-
-        $baseItemDataObjects = $this->mapItems(
-            $shippingAssignment,
-            $priceIncludesTax,
-            true
-        );
-
-        $baseQuoteDetails = $this->prepareQuoteDetails(
-            $shippingAssignment,
-            $baseItemDataObjects
-        );
-
-        $baseTaxDetails = $this->taxCalculationService->calculateTax(
-            $baseQuoteDetails,
-            $store->getStoreId()
-        );
-
-        $subtotal = $total->getTotalAmount('subtotal');
-        $tax = $total->getTotalAmount('tax');
-        $discountTaxCompensation = $total->getTotalAmount('discount_tax_compensation');
-        $subtotalInclTax = $total->getData('subtotal_incl_tax');
-
-        $baseSubtotal = $total->getBaseTotalAmount('subtotal');
-        $baseTax = $total->getBaseTotalAmount('tax');
-        $baseDiscountTaxCompensation = $total->getBaseTotalAmount('discount_tax_compensation');
-        $baseSubtotalInclTax = $total->getData('base_subtotal_incl_tax');
-
-        foreach ($taxDetails->getItems() as $itemTaxDetail) {
-            $items = $shippingAssignment->getItems();
-
-            /** @var Item $item */
-            foreach ($items as $item) {
-                $optionCalculationCodes = $item->getData('option_calculation_codes');
-
-                if ($optionCalculationCodes === null) {
-                    $optionCalculationCodes = [];
-                }
-
-                if (in_array(
-                    $itemTaxDetail->getCode(),
-                    $optionCalculationCodes
-                )) {
-                    $subtotal += $itemTaxDetail->getRowTotal();
-                    $tax += $itemTaxDetail->getTaxAmount();
-                    $discountTaxCompensation += $itemTaxDetail->getDiscountTaxCompensationAmount();
-                    $subtotalInclTax += $itemTaxDetail->getRowTotalInclTax();
-
-                    $item->setPrice($item->getPrice() + $itemTaxDetail->getRowTotal());
-                    $item->setPriceInclTax($item->getPriceInclTax() + $itemTaxDetail->getRowTotalInclTax());
-                    $item->setRowTotal($item->getRowTotal() + $itemTaxDetail->getRowTotal());
-                    $item->setRowTotalInclTax($item->getRowTotalInclTax() + $itemTaxDetail->getRowTotalInclTax());
-                    $item->setData(
-                        'converted_price',
-                        $this->priceCurrency->convert(
-                            $item->getPrice(),
-                            $store
-                        )
-                    );
-                }
+            foreach ($itemDetails as $taxableDetails) {
+                $this->addPrices($item, $total, $taxableDetails);
             }
         }
-
-        foreach ($baseTaxDetails->getItems() as $itemBaseTaxDetail) {
-            $items = $shippingAssignment->getItems();
-
-            /** @var AbstractItem $item */
-            foreach ($items as $item) {
-                $optionCalculationCodes = $item->getData('option_calculation_codes');
-
-                if ($optionCalculationCodes === null) {
-                    $optionCalculationCodes = [];
-                }
-
-                if (in_array(
-                    $itemBaseTaxDetail->getCode(),
-                    $optionCalculationCodes
-                )) {
-                    $baseSubtotal += $itemBaseTaxDetail->getRowTotal();
-                    $baseTax += $itemBaseTaxDetail->getTaxAmount();
-                    $baseDiscountTaxCompensation += $itemBaseTaxDetail->getDiscountTaxCompensationAmount();
-                    $baseSubtotalInclTax += $itemBaseTaxDetail->getRowTotalInclTax();
-
-                    $item->setBasePrice($item->getBasePrice() + $itemBaseTaxDetail->getRowTotal());
-                    $item->setBasePriceInclTax($item->getBasePriceInclTax() + $itemBaseTaxDetail->getRowTotalInclTax());
-                    $item->setBaseRowTotal($item->getBaseRowTotal() + $itemBaseTaxDetail->getRowTotal());
-                    $item->setBaseRowTotalInclTax(
-                        $item->getBaseRowTotalInclTax() + $itemBaseTaxDetail->getRowTotalInclTax()
-                    );
-                }
-            }
-        }
-
-        $total->setTotalAmount(
-            'subtotal',
-            $subtotal
-        );
-        $total->setBaseTotalAmount(
-            'subtotal',
-            $baseSubtotal
-        );
-        $total->setTotalAmount(
-            'tax',
-            $tax
-        );
-        $total->setBaseTotalAmount(
-            'tax',
-            $baseTax
-        );
-        $total->setTotalAmount(
-            'discount_tax_compensation',
-            $discountTaxCompensation
-        );
-        $total->setBaseTotalAmount(
-            'discount_tax_compensation',
-            $baseDiscountTaxCompensation
-        );
-        $total->setData(
-            'subtotal_incl_tax',
-            $subtotalInclTax
-        );
-        $total->setData(
-            'base_subtotal_incl_tax',
-            $baseSubtotalInclTax
-        );
-        $total->setData(
-            'base_subtotal_total_incl_tax',
-            $baseSubtotalInclTax
-        );
-
-        $address = $shippingAssignment->getShipping()->getAddress();
-
-        $address->setSubtotal($subtotal);
-        $address->setSubtotalInclTax($subtotalInclTax);
-        $address->setBaseTaxAmount($baseTax);
-        $address->setBaseSubtotal($baseSubtotal);
-        $address->setBaseSubtotalTotalInclTax($baseSubtotalInclTax);
 
         return $this;
     }
 
     /**
-     * @throws \Exception
+     * Returns the details of the associated taxables of this module that Magento's tax collector calculated.
+     *
+     * @param Total $total
+     *
+     * @return array
+     * @phpstan-return array<string, list<array<string, mixed>>> details by tax calculation ID of the item
      */
-    public function mapItems(
-        ShippingAssignmentInterface $shippingAssignment,
-        $priceIncludesTax,
-        $useBaseCurrency
-    ): array {
-        $items = $shippingAssignment->getItems();
+    private function getTaxableDetails(Total $total): array
+    {
+        $extraTaxableDetails = $total->getData('extra_taxable_details');
+        $typeDetails = is_array($extraTaxableDetails) ? $extraTaxableDetails[ AssociatedTaxable::TYPE ] ?? null : null;
+        $details = [];
 
-        if (empty($items)) {
-            return [];
-        }
-
-        $itemDataObjects = [];
-
-        /** @var AbstractItem $item */
-        foreach ($items as $item) {
-            if ($item->getParentItem()) {
-                continue;
-            }
-
-            $itemOptionIds = $item->getOptionByCode('option_ids');
-
-            if ($itemOptionIds && $itemOptionIds->getValue()) {
-                $optionIds = explode(
-                    ',',
-                    $itemOptionIds->getValue()
-                );
-
-                $optionCalculationCodes = [];
-
-                foreach ($optionIds as $optionId) {
-                    $option = $item->getProduct()->getOptionById($optionId);
-
-                    if ($option && $option->getType() === 'product' && $option->getData('option_product_unattached')) {
-                        $product = $this->helper->getOptionProduct($option);
-
-                        $itemOption = $item->getOptionByCode('option_' . $option->getId());
-
-                        $price = $this->helper->getOptionPrice($option);
-
-                        if ($product->getTypeId() === Configurable::TYPE_CODE) {
-                            foreach ($this->productHelper->getUsedProducts($product) as $usedProduct) {
-                                if ($usedProduct->getId() == $itemOption->getValue()) {
-                                    $product = $usedProduct;
-                                    $price = $usedProduct->getFinalPrice();
-                                    break;
-                                }
-                            }
-                        }
-
-                        if ($useBaseCurrency) {
-                            $price = $this->priceCurrency->convert(
-                                $price,
-                                $product->getStore()
-                            );
-                        }
-
-                        $innerTransportObject = new DataObject(
-                            [
-                                'product' => $item->getProduct(),
-                                'option'  => $option,
-                                'qty'     => 1
-                            ]
-                        );
-
-                        $this->eventManager->dispatch(
-                            'catalog_product_option_product_qty',
-                            [
-                                'data' => $innerTransportObject
-                            ]
-                        );
-
-                        $code = sprintf(
-                            'catalog_product_option_product-%d-%d',
-                            $optionId,
-                            $product->getId()
-                        );
-                        $qty = $innerTransportObject->getData('qty');
-
-                        $taxClassKeyDataObject = $this->taxClassKeyDataObjectFactory->create();
-                        $taxClassKeyDataObject->setType(TaxClassKeyInterface::TYPE_ID);
-                        $taxClassKeyDataObject->setValue($product->getDataUsingMethod('tax_class_id'));
-
-                        $itemDataObject = $this->quoteDetailsItemDataObjectFactory->create();
-
-                        $itemDataObject->setCode($code);
-                        $itemDataObject->setQuantity($qty);
-                        $itemDataObject->setTaxClassKey($taxClassKeyDataObject);
-                        $itemDataObject->setIsTaxIncluded($priceIncludesTax);
-                        $itemDataObject->setType('catalog_product_option_product');
-                        $itemDataObject->setUnitPrice($price);
-                        $itemDataObject->setDiscountAmount(0);
-                        $itemDataObject->setParentCode(null);
-
-                        $itemDataObjects[] = [$itemDataObject];
-
-                        $optionCalculationCodes[] = $code;
-                    }
+        foreach (is_array($typeDetails) ? $typeDetails : [] as $itemCode => $itemDetails) {
+            foreach (is_array($itemDetails) ? $itemDetails : [] as $taxableDetails) {
+                if (is_array($taxableDetails)) {
+                    $details[ (string)$itemCode ][] = $taxableDetails;
                 }
-
-                $item->setData(
-                    'option_calculation_codes',
-                    $optionCalculationCodes
-                );
             }
         }
 
-        return array_merge(
-            [],
-            ...
-            $itemDataObjects
-        );
+        return $details;
+    }
+
+    /**
+     * Adds the prices of one associated taxable to the item and the totals.
+     *
+     * Like Magento's tax collector, the price of the item is in the base currency, the converted price in the currency
+     * of the quote.
+     *
+     * @param AbstractItem $item
+     * @param Total $total
+     * @param array $details
+     * @phpstan-param array<string, mixed> $details
+     *
+     * @return void
+     */
+    private function addPrices(AbstractItem $item, Total $total, array $details): void
+    {
+        $detailsObject = new DataObject($details);
+
+        $rowTotal = $this->getAmount($detailsObject, CommonTaxCollector::KEY_TAX_DETAILS_ROW_TOTAL);
+        $rowTotalInclTax = $this->getAmount($detailsObject, CommonTaxCollector::KEY_TAX_DETAILS_ROW_TOTAL_INCL_TAX);
+        $rowTax = $this->getAmount($detailsObject, CommonTaxCollector::KEY_TAX_DETAILS_ROW_TAX);
+        $baseRowTotal = $this->getAmount($detailsObject, CommonTaxCollector::KEY_TAX_DETAILS_BASE_ROW_TOTAL);
+        $baseRowTotalInclTax =
+            $this->getAmount($detailsObject, CommonTaxCollector::KEY_TAX_DETAILS_BASE_ROW_TOTAL_INCL_TAX);
+        $baseRowTax = $this->getAmount($detailsObject, CommonTaxCollector::KEY_TAX_DETAILS_BASE_ROW_TAX);
+
+        $total->addTotalAmount('subtotal', $rowTotal);
+        $total->addBaseTotalAmount('subtotal', $baseRowTotal);
+
+        $totalAmounts = [
+            'subtotal_incl_tax'            => $rowTotalInclTax,
+            'base_subtotal_incl_tax'       => $baseRowTotalInclTax,
+            'base_subtotal_total_incl_tax' => $baseRowTotalInclTax
+        ];
+
+        foreach ($totalAmounts as $key => $amount) {
+            $total->setData($key, $this->getAmount($total, $key) + $amount);
+        }
+
+        foreach (['price' => $baseRowTotal, 'converted_price' => $rowTotal, 'price_incl_tax' => $rowTotalInclTax,
+                     'row_total' => $rowTotal, 'row_total_incl_tax' => $rowTotalInclTax, 'tax_amount' => $rowTax,
+                     'base_price' => $baseRowTotal, 'base_price_incl_tax' => $baseRowTotalInclTax,
+                     'base_row_total' => $baseRowTotal, 'base_row_total_incl_tax' => $baseRowTotalInclTax,
+                     'base_tax_amount' => $baseRowTax] as $key => $amount) {
+
+            $item->setData($key, $this->getAmount($item, $key) + $amount);
+        }
+    }
+
+    /**
+     * Returns an amount of the object, 0 if it has none.
+     *
+     * @param DataObject $object
+     * @param string $key
+     *
+     * @return float
+     */
+    private function getAmount(DataObject $object, string $key): float
+    {
+        $amount = $object->getData($key);
+
+        return is_numeric($amount) ? (float)$amount : 0.0;
     }
 }

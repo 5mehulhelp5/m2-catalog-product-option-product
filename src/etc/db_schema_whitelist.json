@@ -1,0 +1,11 @@
+{
+    "catalog_product_option": {
+        "column": {
+            "option_product_id": true,
+            "option_product_code_attribute": true,
+            "option_product_unattached": true,
+            "option_product_attribute_option_mapping": true,
+            "option_product_attribute_option_preselect": true
+        }
+    }
+}

@@ -2,358 +2,127 @@
 
 declare(strict_types=1);
 
+/**
+ * @author      Andreas Knollmann
+ * @copyright   Copyright (c) 2014-2026 Softwareentwicklung Andreas Knollmann
+ * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ */
+
 namespace Infrangible\CatalogProductOptionProduct\Model\Sales\Total\Quote;
 
 use Infrangible\CatalogProductOptionProduct\Helper\Data;
-use Infrangible\Core\Helper\Product;
-use Magento\ConfigurableProduct\Model\Product\Type\Configurable;
-use Magento\Customer\Api\AccountManagementInterface;
-use Magento\Customer\Api\Data\AddressInterfaceFactory;
-use Magento\Customer\Api\Data\RegionInterfaceFactory;
-use Magento\Framework\DataObject;
-use Magento\Framework\Event\ManagerInterface;
 use Magento\Framework\Pricing\PriceCurrencyInterface;
 use Magento\Quote\Api\Data\ShippingAssignmentInterface;
 use Magento\Quote\Model\Quote;
 use Magento\Quote\Model\Quote\Address\Total;
+use Magento\Quote\Model\Quote\Address\Total\AbstractTotal;
 use Magento\Quote\Model\Quote\Item\AbstractItem;
-use Magento\Tax\Api\Data\QuoteDetailsInterfaceFactory;
-use Magento\Tax\Api\Data\QuoteDetailsItemExtensionInterfaceFactory;
-use Magento\Tax\Api\Data\QuoteDetailsItemInterface;
-use Magento\Tax\Api\Data\QuoteDetailsItemInterfaceFactory;
-use Magento\Tax\Api\Data\TaxClassKeyInterface;
-use Magento\Tax\Api\Data\TaxClassKeyInterfaceFactory;
-use Magento\Tax\Api\TaxCalculationInterface;
 use Magento\Tax\Model\Config;
 use Magento\Tax\Model\Sales\Total\Quote\CommonTaxCollector;
 
 /**
- * @author      Andreas Knollmann
- * @copyright   2014-2025 Softwareentwicklung Andreas Knollmann
- * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ * Adds the products of the selected unattached options of the cart items to the items as associated taxables.
+ *
+ * This happens before the tax is calculated. Magento calculates their tax with the tax class of the product of the
+ * option and adds it to the tax of the quote; the collector "Tax" adds their prices to the items and the subtotal.
  */
-class AssociatedTaxable extends CommonTaxCollector
+class AssociatedTaxable extends AbstractTotal
 {
-    /** @var Data */
-    protected $helper;
+    /** The type of the associated taxables. */
+    public const TYPE = 'catalog_product_option_product';
 
-    /** @var Product */
-    protected $productHelper;
-
-    /** @var ManagerInterface */
-    protected $eventManager;
-
-    /** @var PriceCurrencyInterface */
-    protected $priceCurrency;
-
+    /**
+     * @param Data $helper
+     * @param Config $taxConfig
+     * @param PriceCurrencyInterface $priceCurrency
+     */
     public function __construct(
-        Config $taxConfig,
-        TaxCalculationInterface $taxCalculationService,
-        QuoteDetailsInterfaceFactory $quoteDetailsDataObjectFactory,
-        QuoteDetailsItemInterfaceFactory $quoteDetailsItemDataObjectFactory,
-        TaxClassKeyInterfaceFactory $taxClassKeyDataObjectFactory,
-        AddressInterfaceFactory $customerAddressFactory,
-        RegionInterfaceFactory $customerAddressRegionFactory,
-        Data $helper,
-        Product $productHelper,
-        ManagerInterface $eventManager,
-        PriceCurrencyInterface $priceCurrency,
-        \Magento\Tax\Helper\Data $taxHelper = null,
-        QuoteDetailsItemExtensionInterfaceFactory $quoteDetailsItemExtensionInterfaceFactory = null,
-        ?AccountManagementInterface $customerAccountManagement = null
+        protected Data $helper,
+        protected Config $taxConfig,
+        protected PriceCurrencyInterface $priceCurrency
     ) {
-        parent::__construct(
-            $taxConfig,
-            $taxCalculationService,
-            $quoteDetailsDataObjectFactory,
-            $quoteDetailsItemDataObjectFactory,
-            $taxClassKeyDataObjectFactory,
-            $customerAddressFactory,
-            $customerAddressRegionFactory,
-            $taxHelper,
-            $quoteDetailsItemExtensionInterfaceFactory,
-            $customerAccountManagement
-        );
-
-        $this->helper = $helper;
-        $this->productHelper = $productHelper;
-        $this->eventManager = $eventManager;
-        $this->priceCurrency = $priceCurrency;
     }
 
     /**
-     * @throws \Exception
+     * Replaces the associated taxables of this type of the items.
+     *
+     * @param Quote $quote
+     * @param ShippingAssignmentInterface $shippingAssignment
+     * @param Total $total
+     *
+     * @return $this
      */
-    public function collect(
-        Quote $quote,
-        ShippingAssignmentInterface $shippingAssignment,
-        Total $total
-    ): AssociatedTaxable {
-        $items = $shippingAssignment->getItems();
-
-        if (! $items) {
-            return $this;
-        }
-
-        /** @var AbstractItem $item */
-        foreach ($items as $item) {
-            $itemAssociatedTaxables = $item->getData('associated_taxables');
-
-            if (! $itemAssociatedTaxables) {
-                $itemAssociatedTaxables = [];
-            } else {
-                // remove existing weee associated taxables
-                foreach ($itemAssociatedTaxables as $iTaxable => $taxable) {
-                    if ($taxable[ CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_TYPE ] ==
-                        'catalog_product_option_product') {
-                        unset($itemAssociatedTaxables[ $iTaxable ]);
-                    }
-                }
-            }
-
-            $item->setData(
-                'associated_taxables',
-                $itemAssociatedTaxables
-            );
-        }
+    public function collect(Quote $quote, ShippingAssignmentInterface $shippingAssignment, Total $total): static
+    {
+        parent::collect($quote, $shippingAssignment, $total);
 
         $store = $quote->getStore();
+        $priceIncludesTax = $this->taxConfig->priceIncludesTax($store);
 
-        $priceIncludesTax = $this->_config->priceIncludesTax($store);
+        foreach ($shippingAssignment->getItems() as $item) {
+            if (! $item instanceof AbstractItem) {
+                continue;
+            }
 
-        $itemDataObjects = $this->mapItems(
-            $shippingAssignment,
-            $priceIncludesTax,
-            false
-        );
+            $taxables = $this->getOtherTaxables($item);
 
-        $quoteDetails = $this->prepareQuoteDetails(
-            $shippingAssignment,
-            $itemDataObjects
-        );
+            if ($item->getParentItem() === null) {
+                $product = $item->getProduct();
 
-        $taxDetails = $this->taxCalculationService->calculateTax(
-            $quoteDetails,
-            $store->getStoreId()
-        );
+                foreach ($this->helper->getSelectedUnattachedOptions($product) as $optionId => $selectedOption) {
+                    $option = $selectedOption[ 'option' ];
+                    $value = $selectedOption[ 'value' ];
 
-        $baseItemDataObjects = $this->mapItems(
-            $shippingAssignment,
-            $priceIncludesTax,
-            true
-        );
+                    $taxProduct =
+                        $this->helper->getSelectedProduct($option, $value) ?? $this->helper->getOptionProduct($option);
+                    $basePrice = $this->helper->getSelectedPrice($option, $value);
 
-        $baseQuoteDetails = $this->prepareQuoteDetails(
-            $shippingAssignment,
-            $baseItemDataObjects
-        );
-
-        $baseTaxDetails = $this->taxCalculationService->calculateTax(
-            $baseQuoteDetails,
-            $store->getStoreId()
-        );
-
-        $itemPriceList = [];
-
-        foreach ($taxDetails->getItems() as $itemTaxDetail) {
-            $items = $shippingAssignment->getItems();
-
-            /** @var AbstractItem $item */
-            foreach ($items as $item) {
-                $optionCalculationCodes = $item->getData('option_calculation_codes');
-
-                if ($optionCalculationCodes === null) {
-                    $optionCalculationCodes = [];
-                }
-
-                if (in_array(
-                    $itemTaxDetail->getCode(),
-                    $optionCalculationCodes
-                )) {
-                    /** @var QuoteDetailsItemInterface $itemDataObject */
-                    foreach ($itemDataObjects as $itemDataObject) {
-                        if ($itemDataObject->getCode() == $itemTaxDetail->getCode()) {
-                            $itemPriceList[ $item->getId() ][ $itemTaxDetail->getCode() ][ 'qty' ] =
-                                $itemDataObject->getQuantity();
-                        }
-                    }
-
-                    $itemPriceList[ $item->getId() ][ $itemTaxDetail->getCode() ][ 'price' ] =
-                        $itemTaxDetail->getPriceInclTax();
+                    $taxables[] = [
+                        CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_TYPE                  => self::TYPE,
+                        CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_CODE                  =>
+                            sprintf('%s-%d-%s', self::TYPE, spl_object_id($item), $optionId),
+                        CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_UNIT_PRICE            =>
+                            $this->priceCurrency->convert($basePrice, $store),
+                        CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_BASE_UNIT_PRICE       => $basePrice,
+                        CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_QUANTITY              =>
+                            $this->helper->getUnattachedQty($product, $option),
+                        CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_TAX_CLASS_ID          =>
+                            $taxProduct?->getData('tax_class_id'),
+                        CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_PRICE_INCLUDES_TAX    => $priceIncludesTax,
+                        CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_ASSOCIATION_ITEM_CODE =>
+                            CommonTaxCollector::ASSOCIATION_ITEM_CODE_FOR_QUOTE
+                    ];
                 }
             }
-        }
 
-        foreach ($baseTaxDetails->getItems() as $itemBaseTaxDetail) {
-            $items = $shippingAssignment->getItems();
-
-            /** @var AbstractItem $item */
-            foreach ($items as $item) {
-                $optionCalculationCodes = $item->getData('option_calculation_codes');
-
-                if ($optionCalculationCodes === null) {
-                    $optionCalculationCodes = [];
-                }
-
-                if (in_array(
-                    $itemBaseTaxDetail->getCode(),
-                    $optionCalculationCodes
-                )) {
-                    $itemPriceList[ $item->getId() ][ $itemBaseTaxDetail->getCode() ][ 'base_price' ] =
-                        $itemBaseTaxDetail->getPriceInclTax();
-                }
-            }
-        }
-
-        foreach ($itemPriceList as $itemId => $itemPrices) {
-            /** @var AbstractItem $item */
-            foreach ($items as $item) {
-                if ($itemId == $item->getId()) {
-                    foreach ($itemPrices as $itemPrice) {
-                        $code = 'catalog_product_option_product_' . $this->getNextIncrement();
-
-                        $taxClassId = $item->getProduct()->getData('tax_class_id');
-
-                        $itemAssociatedTaxables = $item->getData('associated_taxables');
-
-                        $associatedTaxable = [
-                            CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_TYPE                  => 'catalog_product_option_product',
-                            CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_CODE                  => $code,
-                            CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_UNIT_PRICE            => $itemPrice[ 'price' ],
-                            CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_BASE_UNIT_PRICE       => $itemPrice[ 'base_price' ],
-                            CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_QUANTITY              => $itemPrice[ 'qty' ],
-                            CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_TAX_CLASS_ID          => $taxClassId,
-                            CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_PRICE_INCLUDES_TAX    => $priceIncludesTax,
-                            CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_ASSOCIATION_ITEM_CODE => CommonTaxCollector::ASSOCIATION_ITEM_CODE_FOR_QUOTE
-                        ];
-
-                        $itemAssociatedTaxables[] = $associatedTaxable;
-
-                        $item->setData(
-                            'associated_taxables',
-                            $itemAssociatedTaxables
-                        );
-                    }
-                }
-            }
+            $item->setData('associated_taxables', $taxables);
         }
 
         return $this;
     }
 
     /**
-     * @throws \Exception
+     * Returns the associated taxables of the item that are not of this type (for example of Magento_Weee).
+     *
+     * @param AbstractItem $item
+     *
+     * @return array
+     * @phpstan-return list<mixed>
      */
-    public function mapItems(
-        ShippingAssignmentInterface $shippingAssignment,
-        $priceIncludesTax,
-        $useBaseCurrency
-    ): array {
-        $items = $shippingAssignment->getItems();
+    private function getOtherTaxables(AbstractItem $item): array
+    {
+        $taxables = $item->getData('associated_taxables');
 
-        if (empty($items)) {
+        if (! is_array($taxables)) {
             return [];
         }
 
-        $itemDataObjects = [];
-
-        /** @var AbstractItem $item */
-        foreach ($items as $item) {
-            if ($item->getParentItem()) {
-                continue;
-            }
-
-            $itemOptionIds = $item->getOptionByCode('option_ids');
-
-            if ($itemOptionIds && $itemOptionIds->getValue()) {
-                $optionIds = explode(
-                    ',',
-                    $itemOptionIds->getValue()
-                );
-
-                $optionCalculationCodes = [];
-
-                foreach ($optionIds as $optionId) {
-                    $option = $item->getProduct()->getOptionById($optionId);
-
-                    if ($option && $option->getType() === 'product' && $option->getData('option_product_unattached')) {
-                        $product = $this->helper->getOptionProduct($option);
-
-                        $itemOption = $item->getOptionByCode('option_' . $option->getId());
-
-                        $price = $this->helper->getOptionPrice($option);
-
-                        if ($product->getTypeId() === Configurable::TYPE_CODE) {
-                            foreach ($this->productHelper->getUsedProducts($product) as $usedProduct) {
-                                if ($usedProduct->getId() == $itemOption->getValue()) {
-                                    $product = $usedProduct;
-                                    $price = $usedProduct->getFinalPrice();
-                                    break;
-                                }
-                            }
-                        }
-
-                        if ($useBaseCurrency) {
-                            $price = $this->priceCurrency->convert(
-                                $price,
-                                $product->getStore()
-                            );
-                        }
-
-                        $innerTransportObject = new DataObject(
-                            [
-                                'product' => $item->getProduct(),
-                                'option'  => $option,
-                                'qty'     => 1
-                            ]
-                        );
-
-                        $this->eventManager->dispatch(
-                            'catalog_product_option_product_qty',
-                            [
-                                'data' => $innerTransportObject
-                            ]
-                        );
-
-                        $code = sprintf(
-                            'catalog_product_option_product-%d-%d',
-                            $optionId,
-                            $product->getId()
-                        );
-                        $qty = $innerTransportObject->getData('qty');
-
-                        $taxClassKeyDataObject = $this->taxClassKeyDataObjectFactory->create();
-                        $taxClassKeyDataObject->setType(TaxClassKeyInterface::TYPE_ID);
-                        $taxClassKeyDataObject->setValue($product->getDataUsingMethod('tax_class_id'));
-
-                        $itemDataObject = $this->quoteDetailsItemDataObjectFactory->create();
-
-                        $itemDataObject->setCode($code);
-                        $itemDataObject->setQuantity($qty);
-                        $itemDataObject->setTaxClassKey($taxClassKeyDataObject);
-                        $itemDataObject->setIsTaxIncluded($priceIncludesTax);
-                        $itemDataObject->setType('catalog_product_option_product');
-                        $itemDataObject->setUnitPrice($price);
-                        $itemDataObject->setDiscountAmount(0);
-                        $itemDataObject->setParentCode(null);
-
-                        $itemDataObjects[] = [$itemDataObject];
-
-                        $optionCalculationCodes[] = $code;
-                    }
-                }
-
-                $item->setData(
-                    'option_calculation_codes',
-                    $optionCalculationCodes
-                );
-            }
-        }
-
-        return array_merge(
-            [],
-            ...
-            $itemDataObjects
+        return array_values(
+            array_filter(
+                $taxables,
+                fn(mixed $taxable): bool => ! is_array($taxable) ||
+                    ($taxable[ CommonTaxCollector::KEY_ASSOCIATED_TAXABLE_TYPE ] ?? null) !== self::TYPE
+            )
         );
     }
 }

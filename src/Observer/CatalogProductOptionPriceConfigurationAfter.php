@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+/**
+ * @author      Andreas Knollmann
+ * @copyright   Copyright (c) 2014-2026 Softwareentwicklung Andreas Knollmann
+ * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ */
+
 namespace Infrangible\CatalogProductOptionProduct\Observer;
 
 use Infrangible\CatalogProductOptionProduct\Helper\Data;
@@ -12,62 +18,59 @@ use Magento\Framework\Event\Observer;
 use Magento\Framework\Event\ObserverInterface;
 
 /**
- * @author      Andreas Knollmann
- * @copyright   2014-2025 Softwareentwicklung Andreas Knollmann
- * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ * Stores the price configuration of the options with a product under the IDs of their products.
+ *
+ * The IDs of the products are the values of these options. The event "catalog_product_option_price_configuration_after"
+ * passes the options only from Infrangible Catalog Product Option; Magento's block of the options passes none, then
+ * the options of the current product are used.
  */
 class CatalogProductOptionPriceConfigurationAfter implements ObserverInterface
 {
-    /** @var Data */
-    protected $helper;
-
-    /** @var Registry */
-    protected $registryHelper;
-
-    public function __construct(Data $helper, Registry $registryHelper)
-    {
-        $this->helper = $helper;
-        $this->registryHelper = $registryHelper;
-    }
-
-    public function execute(Observer $observer): void
-    {
-        /** @var DataObject $configObject */
-        $configObject = $observer->getData('configObj');
-
-        $config = $configObject->getData('config');
-
-        $options = $observer->getData('options');
-
-        if ($options === null) {
-            $options = $this->getOptions();
-        }
-
-        $config = $this->helper->prepareProductOptionsConfig(
-            $config,
-            $options
-        );
-
-        $configObject->setData(
-            'config',
-            $config
-        );
-    }
-
-    public function getOptions(): ?array
-    {
-        return $this->getProduct()->getOptions();
+    /**
+     * @param Data $helper
+     * @param Registry $registryHelper
+     */
+    public function __construct(
+        protected Data $helper,
+        protected Registry $registryHelper
+    ) {
     }
 
     /**
-     * @throws \LogicException
+     * Changes the configuration.
+     *
+     * @param Observer $observer
+     *
+     * @return void
      */
-    public function getProduct(): Product
+    public function execute(Observer $observer): void
     {
-        if ($this->registryHelper->registry('current_product')) {
-            return $this->registryHelper->registry('current_product');
-        } else {
-            throw new \LogicException('Product is not defined');
+        $configObject = $observer->getData('configObj');
+
+        if (! $configObject instanceof DataObject) {
+            return;
         }
+
+        $config = $configObject->getData('config');
+        $options = $observer->getData('options') ?? $this->getCurrentProductOptions();
+
+        if (! is_array($config) || ! is_array($options)) {
+            return;
+        }
+
+        $configObject->setData('config', $this->helper->prepareProductOptionsConfig($config, $options));
+    }
+
+    /**
+     * Returns the options of the current product, null if there is no current product.
+     *
+     * @return array|null
+     * @phpstan-return array<int|string, mixed>|null
+     */
+    private function getCurrentProductOptions(): ?array
+    {
+        $product = $this->registryHelper->registry('current_product');
+
+        return $product instanceof Product ? $product->getOptions() : null;
     }
 }

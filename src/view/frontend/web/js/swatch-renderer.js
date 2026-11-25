@@ -1,6 +1,6 @@
 /**
  * @author      Andreas Knollmann
- * @copyright   Copyright (c) 2014-2025 Softwareentwicklung Andreas Knollmann
+ * @copyright   Copyright (c) 2014-2026 Softwareentwicklung Andreas Knollmann
  * @license     http://www.opensource.org/licenses/mit-license.php MIT
  */
 
@@ -11,7 +11,17 @@ define([
 ], function ($, domReady) {
     'use strict';
 
-    $.widget('mage.productOptionSwatches', $.mage.SwatchRenderer, {
+    return $.widget('mage.productOptionSwatches', $.mage.SwatchRenderer, {
+        options: {
+            jsonConfig: {
+                attributes: [],
+                optionAttributeMappings: {},
+                initOptionAttributeMappings: true,
+                optionAttributePreselects: {},
+                initOptionAttributePreselects: true
+            }
+        },
+
         _init: function ($this, $widget) {
             this._super($this, $widget);
 
@@ -63,11 +73,11 @@ define([
         initAttributes: function(isInit) {
             const self = this;
 
-            if (! isInit || self.options.jsonConfig.initOptionAttributeMappings) {
+            if (! isInit || self.options.jsonConfig.initOptionAttributePreselects) {
                 self.processOptionAttributePreselects();
             }
 
-            if (! isInit || self.options.jsonConfig.initOptionAttributePreselects) {
+            if (! isInit || self.options.jsonConfig.initOptionAttributeMappings) {
                 $('.swatch-opt .swatch-input').each(function () {
                     self.processOptionAttributeMappings($(this));
                 });
@@ -132,9 +142,6 @@ define([
 
         processOptionAttributePreselects: function() {
             const self = this;
-
-            console.log(self.options.jsonConfig.optionAttributePreselects);
-            console.log(self.options.jsonConfig.attributes);
             $.each(self.options.jsonConfig.optionAttributePreselects, function(attributeId, attributeOptionId) {
                 if (attributeOptionId === 0) {
                     $.each(self.options.jsonConfig.attributes, function(key, attributeData) {
@@ -146,15 +153,12 @@ define([
                     });
                 }
             });
-            console.log(self.options.jsonConfig.optionAttributePreselects);
 
             self._EmulateSelectedByAttributeId(self.options.jsonConfig.optionAttributePreselects);
         },
 
         processOptionAttributeMappings: function(swatchInput) {
             const self = this;
-
-            const productSwatches = $(self.element);
 
             const selectedAttribute = swatchInput.parent();
             const attributeId = parseInt(selectedAttribute.attr('data-attribute-id'));
@@ -165,90 +169,95 @@ define([
             }
 
             $.each(self.options.jsonConfig.optionAttributeMappings, function(sourceAttributeId, sourceAttributeOptionIds) {
-                if (parseInt(sourceAttributeId) === attributeId) {
-                    $.each(sourceAttributeOptionIds, function(sourceAttributeOptionId, targetAttributeData) {
-                        if (parseInt(sourceAttributeOptionId) === attributeOptionId) {
-                            $.each(targetAttributeData, function(targetAttributeId, targetAttributeOptionIds) {
-                                $.each(targetAttributeOptionIds, function(key, targetAttributeOptionId) {
-                                    const swatchAttribute = productSwatches.find(
-                                        'div[data-attribute-id=' + targetAttributeId + '] div[data-option-id=' + targetAttributeOptionId + ']');
-
-                                    if (swatchAttribute.length > 0) {
-                                        if (swatchAttribute.hasClass('disabled')) {
-                                            productSwatches.find('.swatch-option.selected').each(function() {
-                                                $(this).click();
-                                            });
-
-                                            productSwatches.find('.swatch-attribute select').each(function() {
-                                                $(this).val('');
-                                                $(this).find('option[data-option-id="0"]').attr('selected', 'selected');
-                                                $(this).trigger('change');
-                                            });
-
-                                            if (! swatchAttribute.hasClass('disabled')) {
-                                                swatchAttribute.click();
-                                            }
-                                        } else if (! swatchAttribute.hasClass('selected')) {
-                                            swatchAttribute.click();
-                                        }
-                                    } else {
-                                        const swatchSelect = productSwatches.find(
-                                            '.swatch-attribute[data-attribute-id=' + targetAttributeId + '] select.swatch-select');
-
-                                        if (swatchSelect.length > 0) {
-                                            swatchSelect.find('option').removeAttr('selected');
-
-                                            let swatchAttributeOption = swatchSelect.find(
-                                                'option[data-option-id=' + targetAttributeOptionId + ']');
-
-                                            if (swatchAttributeOption.length > 0) {
-                                                if (swatchAttributeOption.is(':disabled')) {
-                                                    productSwatches.find('.swatch-option.selected').each(function() {
-                                                        $(this).click();
-                                                    });
-
-                                                    productSwatches.find('.swatch-attribute select').each(function() {
-                                                        $(this).val('');
-                                                        $(this).find('option[data-option-id="0"]').attr('selected', 'selected');
-                                                        $(this).trigger('change');
-                                                    });
-
-                                                    if (! swatchAttributeOption.is(':disabled')) {
-                                                        swatchAttributeOption.attr('selected', true);
-                                                        swatchAttributeOption.trigger('change');
-                                                    }
-
-                                                    const firstEnabledSwatchAttributeOption =
-                                                        productSwatches.find('.swatch-option:not([disabled="disabled"]):first');
-
-                                                    if (firstEnabledSwatchAttributeOption.length > 0) {
-                                                        firstEnabledSwatchAttributeOption.click();
-                                                        firstEnabledSwatchAttributeOption.attr('selected', true);
-                                                        firstEnabledSwatchAttributeOption.trigger('change');
-                                                    }
-                                                } else {
-                                                    swatchAttributeOption.attr('selected', true);
-                                                    swatchAttributeOption.trigger('change');
-                                                }
-                                            } else {
-                                                swatchAttributeOption = swatchSelect.find(
-                                                    'option[option-id=' + targetAttributeOptionId + ']');
-
-                                                if (swatchAttributeOption.length > 0) {
-                                                    swatchAttributeOption.attr('selected', true);
-                                                    swatchAttributeOption.trigger('change');
-                                                }
-                                            }
-                                        }
-                                    }
-                                });
-                            });
-                        }
-                    });
+                if (parseInt(sourceAttributeId) !== attributeId) {
+                    return;
                 }
+
+                $.each(sourceAttributeOptionIds, function(sourceAttributeOptionId, targetAttributeData) {
+                    if (parseInt(sourceAttributeOptionId) !== attributeOptionId) {
+                        return;
+                    }
+
+                    $.each(targetAttributeData, function(targetAttributeId, targetAttributeOptionIds) {
+                        $.each(targetAttributeOptionIds, function(key, targetAttributeOptionId) {
+                            self.selectMappedAttributeOption(targetAttributeId, targetAttributeOptionId);
+                        });
+                    });
+                });
             });
+        },
+
+        selectMappedAttributeOption: function(targetAttributeId, targetAttributeOptionId) {
+            const productSwatches = $(this.element);
+
+            const swatchAttribute = productSwatches.find(
+                'div[data-attribute-id=' + targetAttributeId + '] div[data-option-id=' + targetAttributeOptionId + ']');
+
+            if (swatchAttribute.length > 0) {
+                if (swatchAttribute.hasClass('disabled')) {
+                    this.resetSelection();
+
+                    if (! swatchAttribute.hasClass('disabled')) {
+                        swatchAttribute.click();
+                    }
+                } else if (! swatchAttribute.hasClass('selected')) {
+                    swatchAttribute.click();
+                }
+
+                return;
+            }
+
+            const swatchSelect = productSwatches.find(
+                '.swatch-attribute[data-attribute-id=' + targetAttributeId + '] select.swatch-select');
+
+            if (swatchSelect.length === 0) {
+                return;
+            }
+
+            swatchSelect.find('option').removeAttr('selected');
+
+            const swatchAttributeOption = swatchSelect.find('option[data-option-id=' + targetAttributeOptionId + ']');
+
+            if (swatchAttributeOption.length === 0) {
+                this.selectOption(swatchSelect.find('option[option-id=' + targetAttributeOptionId + ']'));
+            } else if (swatchAttributeOption.is(':disabled')) {
+                this.resetSelection();
+
+                if (! swatchAttributeOption.is(':disabled')) {
+                    this.selectOption(swatchAttributeOption);
+                }
+
+                const firstEnabledSwatchAttributeOption =
+                    productSwatches.find('.swatch-option:not([disabled="disabled"]):first');
+
+                if (firstEnabledSwatchAttributeOption.length > 0) {
+                    firstEnabledSwatchAttributeOption.click();
+                    this.selectOption(firstEnabledSwatchAttributeOption);
+                }
+            } else {
+                this.selectOption(swatchAttributeOption);
+            }
+        },
+
+        resetSelection: function() {
+            const productSwatches = $(this.element);
+
+            productSwatches.find('.swatch-option.selected').each(function() {
+                $(this).click();
+            });
+
+            productSwatches.find('.swatch-attribute select').each(function() {
+                $(this).val('');
+                $(this).find('option[data-option-id="0"]').attr('selected', 'selected');
+                $(this).trigger('change');
+            });
+        },
+
+        selectOption: function(option) {
+            if (option.length > 0) {
+                option.attr('selected', true);
+                option.trigger('change');
+            }
         }
     });
-
-    return $.mage.productOptionSwatches;
 });

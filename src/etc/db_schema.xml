@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!--
+ * @author      Andreas Knollmann
+ * @copyright   Copyright (c) 2014-2026 Softwareentwicklung Andreas Knollmann
+ * @license     http://www.opensource.org/licenses/mit-license.php MIT
+-->
+<schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Setup/Declaration/Schema/etc/schema.xsd">
+    <table name="catalog_product_option">
+        <column xsi:type="int" name="option_product_id" unsigned="true" nullable="true" comment="Option Product ID"/>
+        <column xsi:type="varchar" name="option_product_code_attribute" length="255" nullable="true" comment="Option Product Code Attribute"/>
+        <column xsi:type="smallint" name="option_product_unattached" unsigned="true" nullable="true" default="0" comment="Unattached"/>
+        <column xsi:type="text" name="option_product_attribute_option_mapping" nullable="true" comment="Attribute Option Mapping"/>
+        <column xsi:type="text" name="option_product_attribute_option_preselect" nullable="true" comment="Attribute Option Preselects"/>
+    </table>
+</schema>

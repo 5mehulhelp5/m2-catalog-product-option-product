@@ -1,0 +1,7 @@
+"Attribute Option Mapping (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)", "Zuordnung der Attributoptionen (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)"
+"Attribute Option Preselect", "Vorauswahl der Attributoptionen"
+"Product", "Produkt"
+"Product Code", "Produktcode"
+"The selected product of the option ""%1"" is not available.", "Das ausgewählte Produkt der Option ""%1"" ist nicht verfügbar."
+"Unattached", "Nicht verbunden"
+"We can't add the product to the cart because of an option validation issue.", "Das Produkt kann wegen eines Fehlers bei der Prüfung der Optionen nicht in den Warenkorb gelegt werden."

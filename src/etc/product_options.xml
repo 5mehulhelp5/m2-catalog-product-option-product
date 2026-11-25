@@ -1,12 +1,11 @@
 <?xml version="1.0"?>
-
 <!--
  * @author      Andreas Knollmann
- * @copyright   Copyright (c) 2014-2025 Softwareentwicklung Andreas Knollmann
+ * @copyright   Copyright (c) 2014-2026 Softwareentwicklung Andreas Knollmann
  * @license     http://www.opensource.org/licenses/mit-license.php MIT
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Catalog:etc/product_options.xsd">
-    <option name="product" label="Product" renderer="Infrangible\CatalogProductOptionProduct\Block\Adminhtml\Product\Edit\Tab\Options\Type\Product">
+    <option name="product" label="Product" renderer="Magento\Catalog\Block\Adminhtml\Product\Edit\Tab\Options\Type\AbstractType">
         <inputType name="product" label="Product"/>
     </option>
 </config>

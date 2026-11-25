@@ -1,0 +1,7 @@
+"Attribute Option Mapping (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)", "Přiřazení možností atributů (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)"
+"Attribute Option Preselect", "Předvýběr možností atributů"
+"Product", "Produkt"
+"Product Code", "Kód produktu"
+"The selected product of the option ""%1"" is not available.", "Vybraný produkt možnosti „%1"" není k dispozici."
+"Unattached", "Nepřipojeno"
+"We can't add the product to the cart because of an option validation issue.", "Produkt nelze přidat do košíku kvůli chybě při ověření možností."

@@ -1,0 +1,7 @@
+"Attribute Option Mapping (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)", "Asignación de opciones de atributo (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)"
+"Attribute Option Preselect", "Preselección de opciones de atributo"
+"Product", "Producto"
+"Product Code", "Código de producto"
+"The selected product of the option ""%1"" is not available.", "El producto seleccionado de la opción ""%1"" no está disponible."
+"Unattached", "No vinculado"
+"We can't add the product to the cart because of an option validation issue.", "No se puede añadir el producto al carrito debido a un error de validación de las opciones."

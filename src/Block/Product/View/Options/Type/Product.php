@@ -1,488 +1,256 @@
-<?php /** @noinspection PhpDeprecationInspection */
+<?php
 
 declare(strict_types=1);
+
+/**
+ * @author      Andreas Knollmann
+ * @copyright   Copyright (c) 2014-2026 Softwareentwicklung Andreas Knollmann
+ * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ */
 
 namespace Infrangible\CatalogProductOptionProduct\Block\Product\View\Options\Type;
 
 use FeWeDev\Base\Json;
 use FeWeDev\Base\Variables;
+use Infrangible\CatalogProductOptionProduct\Helper\Data;
 use Infrangible\Core\Helper\Stores;
 use Magento\Catalog\Block\Product\View\Options\AbstractOptions;
-use Magento\Catalog\Model\Product\Image\UrlBuilder;
 use Magento\Catalog\Model\Product\Option;
-use Magento\Catalog\Pricing\Price\CalculateCustomOptionCatalogRule;
-use Magento\ConfigurableProduct\Model\ConfigurableAttributeData;
-use Magento\ConfigurableProduct\Model\Product\Type\Configurable\Attribute;
-use Magento\ConfigurableProduct\Model\Product\Type\Configurable\Variations\Prices;
+use Magento\ConfigurableProduct\Helper\Data as ConfigurableHelper;
 use Magento\Framework\DataObject;
 use Magento\Framework\Event\ManagerInterface;
-use Magento\Framework\Exception\LocalizedException;
-use Magento\Framework\Exception\NoSuchEntityException;
-use Magento\Framework\Locale\Format;
-use Magento\Framework\Pricing\Adjustment\CalculatorInterface;
-use Magento\Framework\Pricing\Helper\Data;
-use Magento\Framework\Pricing\PriceCurrencyInterface;
+use Magento\Framework\Pricing\Helper\Data as PricingHelper;
 use Magento\Framework\View\Element\Template\Context;
-use Magento\InventorySalesApi\Api\Data\SalesChannelInterface;
 use Magento\Swatches\Block\Product\Renderer\Configurable;
-use Magento\Swatches\Helper\Media;
-use Magento\Swatches\Model\Swatch;
+use Magento\Swatches\Block\Product\Renderer\ConfigurableFactory;
 
 /**
- * @author      Andreas Knollmann
- * @copyright   2014-2025 Softwareentwicklung Andreas Knollmann
- * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ * Renders an option with a product on the product page.
+ *
+ * The option is a checkbox with the name and price of the product, for a configurable product its swatches. The
+ * configuration of the swatches comes from Magento's swatch renderer for the product of the option, with the attribute
+ * option mappings and preselects of the option.
+ *
+ * Unlike other option blocks, getProduct() returns the product of the option; getMainProduct() returns the product of
+ * the page.
+ *
+ * Observers of the events "catalog_product_option_product_init_attribute_mappings" and
+ * "catalog_product_option_product_init_attribute_preselects" can decide if the mappings and preselects are applied
+ * when the swatches are rendered ("result").
  */
 class Product extends AbstractOptions
 {
-    /** @var \Infrangible\CatalogProductOptionProduct\Helper\Data */
-    protected $helper;
+    /** @var array<string, Configurable> swatch renderers by option ID */
+    private array $swatchRenderers = [];
 
-    /** @var Stores */
-    protected $storeHelper;
-
-    /** @var Media */
-    protected $swatchMediaHelper;
-
-    /** @var Json */
-    protected $json;
-
-    /** @var \Magento\Swatches\Helper\Data */
-    protected $swatchHelper;
-
-    /** @var \Magento\ConfigurableProduct\Helper\Data */
-    protected $configurableHelper;
-
-    /** @var ConfigurableAttributeData */
-    protected $configurableAttributeData;
-
-    /** @var Format */
-    protected $localeFormat;
-
-    /** @var Prices */
-    protected $variationPrices;
-
-    /** @var UrlBuilder */
-    protected $imageUrlBuilder;
-
-    /** @var \Infrangible\Core\Helper\Product */
-    protected $productHelper;
-
-    /** @var Variables */
-    protected $variables;
-
-    /** @var ManagerInterface */
-    protected $eventManager;
-
+    /**
+     * @param Context $context
+     * @param PricingHelper $pricingHelper
+     * @param \Magento\Catalog\Helper\Data $catalogData
+     * @param Data $helper
+     * @param Stores $storeHelper
+     * @param ConfigurableHelper $configurableHelper
+     * @param Variables $variables
+     * @param Json $json
+     * @param ManagerInterface $eventManager
+     * @param ConfigurableFactory $swatchRendererFactory
+     * @param array $data
+     * @phpstan-param array<string, mixed> $data
+     */
     public function __construct(
         Context $context,
-        Data $pricingHelper,
+        PricingHelper $pricingHelper,
         \Magento\Catalog\Helper\Data $catalogData,
-        \Infrangible\CatalogProductOptionProduct\Helper\Data $helper,
-        Stores $storeHelper,
-        Media $swatchMediaHelper,
-        Json $json,
-        \Magento\Swatches\Helper\Data $swatchHelper,
-        \Magento\ConfigurableProduct\Helper\Data $configurableHelper,
-        ConfigurableAttributeData $configurableAttributeData,
-        Format $localeFormat,
-        Prices $variationPrices,
-        UrlBuilder $urlBuilder,
-        \Infrangible\Core\Helper\Product $productHelper,
-        Variables $variables,
-        ManagerInterface $eventManager,
-        array $data = [],
-        CalculateCustomOptionCatalogRule $calculateCustomOptionCatalogRule = null,
-        CalculatorInterface $calculator = null,
-        PriceCurrencyInterface $priceCurrency = null
+        protected Data $helper,
+        protected Stores $storeHelper,
+        protected ConfigurableHelper $configurableHelper,
+        protected Variables $variables,
+        protected Json $json,
+        protected ManagerInterface $eventManager,
+        protected ConfigurableFactory $swatchRendererFactory,
+        array $data = []
     ) {
-        parent::__construct(
-            $context,
-            $pricingHelper,
-            $catalogData,
-            $data,
-            $calculateCustomOptionCatalogRule,
-            $calculator,
-            $priceCurrency
-        );
-
-        $this->helper = $helper;
-        $this->storeHelper = $storeHelper;
-        $this->swatchMediaHelper = $swatchMediaHelper;
-        $this->json = $json;
-        $this->swatchHelper = $swatchHelper;
-        $this->configurableHelper = $configurableHelper;
-        $this->configurableAttributeData = $configurableAttributeData;
-        $this->localeFormat = $localeFormat;
-        $this->variationPrices = $variationPrices;
-        $this->imageUrlBuilder = $urlBuilder;
-        $this->productHelper = $productHelper;
-        $this->variables = $variables;
-        $this->eventManager = $eventManager;
+        parent::__construct($context, $pricingHelper, $catalogData, $data);
     }
 
-    public function getPreconfiguredValue(Option $option)
-    {
-        return $this->getProduct()->getPreconfiguredValues()->getData('options/' . $option->getId());
-    }
-
-    public function getCurrencyByStore(float $price)
-    {
-        return $this->pricingHelper->currencyByStore(
-            $price,
-            $this->getProduct()->getStore(),
-            false
-        );
-    }
-
-    public function formatPrice(float $price): string
-    {
-        return parent::_formatPrice(
-            [
-                'is_percent'    => false,
-                'pricing_value' => $price
-            ]
-        );
-    }
-
+    /**
+     * Returns the product of the option, null if it has none.
+     *
+     * @return \Magento\Catalog\Model\Product|null
+     */
     public function getProduct(): ?\Magento\Catalog\Model\Product
     {
-        try {
-            return $this->helper->getOptionProduct($this->getOption());
-        } catch (\Exception $exception) {
-            return null;
-        }
+        return $this->helper->getOptionProduct($this->getOption());
     }
 
+    /**
+     * Returns the product of the page.
+     *
+     * @return \Magento\Catalog\Model\Product
+     */
+    public function getMainProduct(): \Magento\Catalog\Model\Product
+    {
+        return parent::getProduct();
+    }
+
+    /**
+     * Returns the preconfigured value of the option (the ID of the selected product).
+     *
+     * Options are preconfigured when a cart item is edited, for example.
+     *
+     * @param Option $option
+     *
+     * @return mixed
+     */
+    public function getPreconfiguredValue(Option $option): mixed
+    {
+        return $this->getMainProduct()->getPreconfiguredValues()->getData('options/' . $option->getId());
+    }
+
+    /**
+     * Checks if the option is preconfigured with a product.
+     *
+     * @param Option $option
+     *
+     * @return bool
+     */
+    public function isPreconfigured(Option $option): bool
+    {
+        $value = $this->getPreconfiguredValue($option);
+
+        return is_scalar($value) && (string)$value !== '' && (string)$value !== '0';
+    }
+
+    /**
+     * Returns the price of the option: the price entered for it, or the final price of its product.
+     *
+     * @return float
+     */
+    public function getOptionPrice(): float
+    {
+        return $this->helper->getOptionPrice($this->getOption());
+    }
+
+    /**
+     * Returns the price converted into the currency of the store, as number.
+     *
+     * @param float $price
+     *
+     * @return float
+     */
+    public function getCurrencyByStore(float $price): float
+    {
+        $result = $this->pricingHelper->currencyByStore($price, $this->getMainProduct()->getStore(), false);
+
+        return is_numeric($result) ? (float)$result : 0.0;
+    }
+
+    /**
+     * Returns the formatted price for the label of the option.
+     *
+     * @param float $price
+     *
+     * @return string
+     */
+    public function formatPrice(float $price): string
+    {
+        return $this->_formatPrice(['is_percent' => false, 'pricing_value' => $price]);
+    }
+
+    /**
+     * Returns the number of swatches that are shown per attribute.
+     *
+     * @return string
+     */
     public function getNumberSwatchesPerProduct(): string
     {
-        return $this->storeHelper->getStoreConfig('catalog/frontend/swatches_per_product');
+        return $this->variables->stringValueOrDefault($this->getSwatchRenderer()?->getNumberSwatchesPerProduct());
     }
 
+    /**
+     * Returns the configuration of the configurable product for the swatches.
+     *
+     * It contains the attribute option mappings and preselects of the option.
+     *
+     * @return string
+     */
     public function getJsonConfig(): string
     {
-        try {
-            $store = $this->storeHelper->getStore();
-        } catch (NoSuchEntityException $exception) {
-            $this->_logger->error($exception);
+        $config = $this->json->decode($this->getSwatchRenderer()?->getJsonConfig() ?? '{}');
 
-            return '{}';
-        }
+        $config = is_array($config) ? $config : [];
 
-        $currentProduct = $this->getProduct();
+        $config[ 'optionAttributeMappings' ] = $this->getOptionAttributeMappings();
+        $config[ 'initOptionAttributeMappings' ] =
+            $this->isInitialized('catalog_product_option_product_init_attribute_mappings');
+        $config[ 'optionAttributePreselects' ] = $this->getOptionAttributePreselects();
+        $config[ 'initOptionAttributePreselects' ] =
+            $this->isInitialized('catalog_product_option_product_init_attribute_preselects');
 
-        $options = $this->configurableHelper->getOptions(
-            $currentProduct,
-            $this->productHelper->getUsedProducts($currentProduct)
-        );
-
-        $attributesData = $this->configurableAttributeData->getAttributesData(
-            $currentProduct,
-            $options
-        );
-
-        try {
-            $config = [
-                'attributes'                     => $attributesData[ 'attributes' ],
-                'template'                       => str_replace(
-                    '%s',
-                    '<%- data.price %>',
-                    $store->getCurrentCurrency()->getOutputFormat()
-                ),
-                'currencyFormat'                 => $store->getCurrentCurrency()->getOutputFormat(),
-                'optionPrices'                   => $this->productHelper->getUsedProductsPrices($currentProduct),
-                'priceFormat'                    => $this->localeFormat->getPriceFormat(),
-                'prices'                         => $this->variationPrices->getFormattedPrices(
-                    $this->getProduct()->getPriceInfo()
-                ),
-                'productId'                      => $currentProduct->getId(),
-                'chooseText'                     => __('Choose an Option...'),
-                'images'                         => $this->getOptionImages(),
-                'index'                          => $options[ 'index' ] ?? [],
-                'salable'                        => $options[ 'salable' ] ?? [],
-                'canDisplayShowOutOfStockStatus' => $options[ 'canDisplayShowOutOfStockStatus' ] ?? false,
-                'channel'                        => SalesChannelInterface::TYPE_WEBSITE,
-                'salesChannelCode'               => $this->storeHelper->getWebsite()->getCode(),
-                'sku'                            => $this->productHelper->getUsedProductsSkus($currentProduct),
-                'optionAttributeMappings'        => $this->getOptionAttributeMappings(),
-                'initOptionAttributeMappings'    => $this->getInitOptionAttributeMappings(),
-                'optionAttributePreselects'      => $this->getOptionAttributePreselects(),
-                'initOptionAttributePreselects'  => $this->getInitOptionAttributePreselects()
-            ];
-        } catch (LocalizedException $exception) {
-            $this->_logger->error($exception);
-
-            return '{}';
-        }
-
-        /** @noinspection PhpUndefinedMethodInspection */
-        if ($currentProduct->hasPreconfiguredValues() && ! empty($attributesData[ 'defaultValues' ])) {
-            $config[ 'defaultValues' ] = $attributesData[ 'defaultValues' ];
-        }
-
-        return $this->json->encode($config);
+        return $this->json->encode($config) ?? '{}';
     }
 
-    private function getSwatchAttributesData(): array
-    {
-        return $this->swatchHelper->getSwatchAttributesAsArray($this->getProduct());
-    }
-
-    private function getConfigurableOptionsIds(array $attributeData): array
-    {
-        $ids = [];
-
-        foreach ($this->productHelper->getUsedProducts($this->getProduct()) as $product) {
-            /** @var Attribute $attribute */
-            foreach ($this->configurableHelper->getAllowAttributes($this->getProduct()) as $attribute) {
-                $productAttribute = $attribute->getProductAttribute();
-                $productAttributeId = $productAttribute->getId();
-
-                if (isset($attributeData[ $productAttributeId ])) {
-                    $ids[ $product->getData($productAttribute->getAttributeCode()) ] = 1;
-                }
-            }
-        }
-
-        return array_keys($ids);
-    }
-
-    private function getOptionImages(): array
-    {
-        $images = [];
-
-        foreach ($this->productHelper->getUsedProducts($this->getProduct()) as $product) {
-            $productImages = $this->configurableHelper->getGalleryImages($product) ? : [];
-
-            foreach ($productImages as $image) {
-                $images[ $product->getId() ][] = [
-                    'thumb'    => $image->getData('small_image_url'),
-                    'img'      => $image->getData('medium_image_url'),
-                    'full'     => $image->getData('large_image_url'),
-                    'caption'  => $image->getLabel(),
-                    'position' => $image->getPosition(),
-                    'isMain'   => $image->getFile() == $product->getImage(),
-                    'type'     => $image->getMediaType() ? str_replace(
-                        'external-',
-                        '',
-                        $image->getMediaType()
-                    ) : '',
-                    'videoUrl' => $image->getVideoUrl(),
-                ];
-            }
-        }
-
-        return $images;
-    }
-
+    /**
+     * Returns the configuration of the swatches of the configurable product.
+     *
+     * @return string
+     */
     public function getJsonSwatchConfig(): string
     {
-        $attributesData = $this->getSwatchAttributesData();
-
-        $allOptionIds = $this->getConfigurableOptionsIds($attributesData);
-
-        $swatchesData = $this->swatchHelper->getSwatchesByOptionsId($allOptionIds);
-
-        $config = [];
-
-        foreach ($attributesData as $attributeId => $attributeDataArray) {
-            if (isset($attributeDataArray[ 'options' ])) {
-                $config[ $attributeId ] = $this->addSwatchDataForAttribute(
-                    $attributeDataArray[ 'options' ],
-                    $swatchesData,
-                    $attributeDataArray
-                );
-            }
-
-            if (isset($attributeDataArray[ 'additional_data' ])) {
-                $config[ $attributeId ][ 'additional_data' ] = $attributeDataArray[ 'additional_data' ];
-            }
-        }
-
-        return $this->json->encode($config);
+        return $this->variables->stringValueOrDefault($this->getSwatchRenderer()?->getJsonSwatchConfig(), '{}');
     }
 
-    private function addSwatchDataForAttribute(
-        array $options,
-        array $swatchesCollectionArray,
-        array $attributeDataArray
-    ): array {
-        $result = [];
-
-        foreach ($options as $optionId => $label) {
-            if (isset($swatchesCollectionArray[ $optionId ])) {
-                $result[ $optionId ] = $this->extractNecessarySwatchData($swatchesCollectionArray[ $optionId ]);
-                $result[ $optionId ] = $this->addAdditionalMediaData(
-                    $result[ $optionId ],
-                    $optionId,
-                    $attributeDataArray
-                );
-                $result[ $optionId ][ 'label' ] = $label;
-            }
-        }
-
-        return $result;
-    }
-
-    private function extractNecessarySwatchData(array $swatchDataArray): array
-    {
-        $result[ 'type' ] = $swatchDataArray[ 'type' ];
-
-        if ($result[ 'type' ] == Swatch::SWATCH_TYPE_VISUAL_IMAGE && ! empty($swatchDataArray[ 'value' ])) {
-            $result[ 'value' ] = $this->swatchMediaHelper->getSwatchAttributeImage(
-                Swatch::SWATCH_IMAGE_NAME,
-                $swatchDataArray[ 'value' ]
-            );
-            $result[ 'thumb' ] = $this->swatchMediaHelper->getSwatchAttributeImage(
-                Swatch::SWATCH_THUMBNAIL_NAME,
-                $swatchDataArray[ 'value' ]
-            );
-        } else {
-            $result[ 'value' ] = $swatchDataArray[ 'value' ];
-        }
-
-        return $result;
-    }
-
-    private function addAdditionalMediaData(array $swatch, int $optionId, array $attributeDataArray): array
-    {
-        if (isset($attributeDataArray[ 'use_product_image_for_swatch' ]) &&
-            $attributeDataArray[ 'use_product_image_for_swatch' ]) {
-
-            $variationMedia = $this->getVariationMedia(
-                $attributeDataArray[ 'attribute_code' ],
-                $optionId
-            );
-
-            if (! empty($variationMedia)) {
-                $swatch[ 'type' ] = Swatch::SWATCH_TYPE_VISUAL_IMAGE;
-                $swatch = array_merge(
-                    $swatch,
-                    $variationMedia
-                );
-            }
-        }
-        return $swatch;
-    }
-
-    private function getVariationMedia(string $attributeCode, int $optionId): array
-    {
-        /** @var \Magento\Catalog\Model\Product $variationProduct */
-        $variationProduct = $this->swatchHelper->loadFirstVariationWithSwatchImage(
-            $this->getProduct(),
-            [$attributeCode => $optionId]
-        );
-
-        if (! $variationProduct) {
-            $variationProduct = $this->swatchHelper->loadFirstVariationWithImage(
-                $this->getProduct(),
-                [$attributeCode => $optionId]
-            );
-        }
-
-        $variationMediaArray = [];
-
-        if ($variationProduct) {
-            $variationMediaArray = [
-                'value' => $this->getSwatchProductImage(
-                    $variationProduct,
-                    Swatch::SWATCH_IMAGE_NAME
-                ),
-                'thumb' => $this->getSwatchProductImage(
-                    $variationProduct,
-                    Swatch::SWATCH_THUMBNAIL_NAME
-                ),
-            ];
-        }
-
-        return $variationMediaArray;
-    }
-
-    private function getSwatchProductImage(\Magento\Catalog\Model\Product $childProduct, string $imageType): string
-    {
-        if ($this->isProductHasImage(
-            $childProduct,
-            Swatch::SWATCH_IMAGE_NAME
-        )) {
-            $swatchImageId = $imageType;
-            $imageAttributes = ['type' => Swatch::SWATCH_IMAGE_NAME];
-        } elseif ($this->isProductHasImage(
-            $childProduct,
-            'image'
-        )) {
-            $swatchImageId = $imageType == Swatch::SWATCH_IMAGE_NAME ? 'swatch_image_base' : 'swatch_thumb_base';
-            $imageAttributes = ['type' => 'image'];
-        }
-
-        if (! empty($swatchImageId) && ! empty($imageAttributes[ 'type' ])) {
-            return $this->imageUrlBuilder->getUrl(
-                $childProduct->getData($imageAttributes[ 'type' ]),
-                $swatchImageId
-            );
-        }
-
-        return '';
-    }
-
-    private function isProductHasImage(\Magento\Catalog\Model\Product $product, string $imageType): bool
-    {
-        return $product->getData($imageType) !== null &&
-            $product->getData($imageType) != \Magento\Swatches\Helper\Data::EMPTY_IMAGE_VALUE;
-    }
-
+    /**
+     * Returns the URL that loads the images of a variant.
+     *
+     * @return string
+     */
     public function getMediaCallback(): string
     {
-        return $this->getUrl(
-            Configurable::MEDIA_CALLBACK_ACTION,
-            ['_secure' => $this->getRequest()->isSecure()]
-        );
+        return $this->variables->stringValueOrDefault($this->getSwatchRenderer()?->getMediaCallback());
     }
 
-    public function getJsonSwatchSizeConfig(): ?string
+    /**
+     * Returns the sizes of the swatch images.
+     *
+     * @return string
+     */
+    public function getJsonSwatchSizeConfig(): string
     {
-        $imageConfig = $this->swatchMediaHelper->getImageConfig();
-
-        $sizeConfig = [];
-
-        $sizeConfig[ Configurable::SWATCH_IMAGE_NAME ][ 'width' ] =
-            $imageConfig[ Swatch::SWATCH_IMAGE_NAME ][ 'width' ];
-        $sizeConfig[ Configurable::SWATCH_IMAGE_NAME ][ 'height' ] =
-            $imageConfig[ Swatch::SWATCH_IMAGE_NAME ][ 'height' ];
-        $sizeConfig[ Configurable::SWATCH_THUMBNAIL_NAME ][ 'height' ] =
-            $imageConfig[ Swatch::SWATCH_THUMBNAIL_NAME ][ 'height' ];
-        $sizeConfig[ Configurable::SWATCH_THUMBNAIL_NAME ][ 'width' ] =
-            $imageConfig[ Swatch::SWATCH_THUMBNAIL_NAME ][ 'width' ];
-
-        return $this->json->encode($sizeConfig);
+        return $this->variables->stringValueOrDefault($this->getSwatchRenderer()?->getJsonSwatchSizeConfig(), '{}');
     }
 
+    /**
+     * Returns 1 if the swatches show a tooltip, otherwise 0.
+     *
+     * @return int
+     */
     public function getShowSwatchTooltip(): int
     {
-        return $this->storeHelper->getStoreConfigFlag(
-            'catalog/frontend/show_swatch_tooltip',
-            true
-        ) ? 1 : 0;
+        return $this->storeHelper->getStoreConfigFlag('catalog/frontend/show_swatch_tooltip', true) ? 1 : 0;
     }
 
+    /**
+     * Returns the attribute option mappings of the option.
+     *
+     * Selecting the attribute option of the product of the page selects the attribute options of the configurable
+     * product.
+     *
+     * The mappings are entered as "sourceAttributeId:sourceAttributeOptionId:targetAttributeId:targetAttributeOptionId"
+     * separated by commas.
+     *
+     * @return array
+     * @phpstan-return array<string, array<string, array<string, list<string>>>>
+     */
     public function getOptionAttributeMappings(): array
     {
-        $option = $this->getOption();
-
         $mappings = [];
 
-        $attributeOptionMappingConfig = $option->getData('option_product_attribute_option_mapping');
+        foreach ($this->getConfigList('option_product_attribute_option_mapping') as $mapping) {
+            $parts = array_map('trim', explode(':', $mapping));
 
-        if ($attributeOptionMappingConfig) {
-            $attributeOptionMappings = explode(
-                ',',
-                $attributeOptionMappingConfig
-            );
-
-            foreach ($attributeOptionMappings as $attributeOptionMapping) {
-                [$sourceAttributeId, $sourceAttributeOptionId, $targetAttributeId, $targetAttributeOptionId] = explode(
-                    ':',
-                    $attributeOptionMapping
-                );
+            if (count($parts) === 4) {
+                [$sourceAttributeId, $sourceAttributeOptionId, $targetAttributeId, $targetAttributeOptionId] = $parts;
 
                 $mappings[ $sourceAttributeId ][ $sourceAttributeOptionId ][ $targetAttributeId ][] =
                     $targetAttributeOptionId;
@@ -492,118 +260,132 @@ class Product extends AbstractOptions
         return $mappings;
     }
 
-    public function getInitOptionAttributeMappings(): bool
-    {
-        $innerTransportObject = new DataObject(
-            [
-                'product' => $this->getProduct(),
-                'option'  => $this->getOption(),
-                'result'  => true
-            ]
-        );
-
-        $this->eventManager->dispatch(
-            'catalog_product_option_product_init_attribute_mappings',
-            [
-                'data' => $innerTransportObject
-            ]
-        );
-
-        return $innerTransportObject->getData('result');
-    }
-
+    /**
+     * Returns the preselected attribute options of the configurable product by attribute ID.
+     *
+     * These are the attribute options of the preconfigured variant, for example when a cart item is edited, otherwise
+     * those entered for the option.
+     *
+     * They are entered as "attributeId:attributeOptionId" separated by commas, or only "attributeId" for the first
+     * option of the attribute (0).
+     *
+     * @return array
+     * @phpstan-return array<string, string|int>
+     */
     public function getOptionAttributePreselects(): array
     {
-        $preselects = [];
+        $preconfiguredPreselects = $this->getPreconfiguredPreselects();
 
-        $option = $this->getOption();
-
-        $optionProduct = $this->getProduct();
-        $bundleOptionSelectionProduct = parent::getProduct();
-
-        $preConfiguredValues = $bundleOptionSelectionProduct->getPreconfiguredValues();
-
-        if ($preConfiguredValues) {
-            $options = $preConfiguredValues->getData('options');
-
-            if (is_array($options)) {
-                if (array_key_exists(
-                    $option->getId(),
-                    $options
-                )) {
-                    $selectedProductId = $options[ $option->getId() ];
-
-                    if ($selectedProductId) {
-                        try {
-                            $selectedProduct = $this->productHelper->loadProduct(
-                                $this->variables->intValue($selectedProductId),
-                                $this->storeHelper->getStoreId()
-                            );
-
-                            $allowAttributes = $this->configurableHelper->getAllowAttributes($optionProduct);
-
-                            foreach ($allowAttributes as $attribute) {
-                                $productAttribute = $attribute->getProductAttribute();
-                                $attributeId = $productAttribute->getId();
-                                $attributeOptionId = $selectedProduct->getData($productAttribute->getAttributeCode());
-
-                                $preselects[ $attributeId ] = $attributeOptionId;
-                            }
-
-                            return $preselects;
-                        } catch (\Exception $exception) {
-                        }
-                    }
-                }
-            }
+        if ($preconfiguredPreselects !== null) {
+            return $preconfiguredPreselects;
         }
 
-        $attributeOptionPreselectConfig = $option->getData('option_product_attribute_option_preselect');
+        $preselects = [];
 
-        if ($attributeOptionPreselectConfig) {
-            $attributeOptionPreselects = explode(
-                ',',
-                $attributeOptionPreselectConfig
-            );
+        foreach ($this->getConfigList('option_product_attribute_option_preselect') as $preselect) {
+            $parts = array_map('trim', explode(':', $preselect, 2));
 
-            foreach ($attributeOptionPreselects as $attributeOptionPreselect) {
-                if (str_contains(
-                    $attributeOptionPreselect,
-                    ':'
-                )) {
-                    [$attributeId, $attributeOptionId] = explode(
-                        ':',
-                        $attributeOptionPreselect
-                    );
-                } else {
-                    $attributeId = $attributeOptionPreselect;
-                    $attributeOptionId = 0;
-                }
+            $preselects[ $parts[ 0 ] ] = $parts[ 1 ] ?? 0;
+        }
 
-                $preselects[ $attributeId ] = $attributeOptionId;
+        return $preselects;
+    }
+
+    /**
+     * Returns the attribute options of the preconfigured variant by attribute ID, null if there is none.
+     *
+     * @return array|null
+     * @phpstan-return array<string, string|int>|null
+     */
+    private function getPreconfiguredPreselects(): ?array
+    {
+        $option = $this->getOption();
+
+        if (! $this->isPreconfigured($option)) {
+            return null;
+        }
+
+        $variant = $this->helper->getSelectedProduct($option, $this->getPreconfiguredValue($option));
+        $product = $this->getProduct();
+
+        if ($variant === null || $product === null || $variant->getId() === $product->getId()) {
+            return null;
+        }
+
+        $preselects = [];
+
+        foreach ($this->configurableHelper->getAllowAttributes($product) as $attribute) {
+            $productAttribute = $attribute->getProductAttribute();
+
+            if ($productAttribute !== null) {
+                $attributeOptionId = $variant->getData($productAttribute->getAttributeCode());
+
+                $preselects[ $this->variables->stringValueOrDefault($productAttribute->getId()) ] =
+                    is_int($attributeOptionId) ? $attributeOptionId :
+                        $this->variables->stringValueOrDefault($attributeOptionId);
             }
         }
 
         return $preselects;
     }
 
-    public function getInitOptionAttributePreselects(): bool
+    /**
+     * Returns the entries of a comma separated value of the option.
+     *
+     * @param string $key
+     *
+     * @return string[]
+     */
+    private function getConfigList(string $key): array
     {
-        $innerTransportObject = new DataObject(
-            [
-                'product' => $this->getProduct(),
-                'option'  => $this->getOption(),
-                'result'  => true
-            ]
+        $value = $this->variables->stringValueOrDefault($this->getOption()->getData($key));
+
+        return array_values(array_filter(array_map('trim', explode(',', $value)), fn(string $entry) => $entry !== ''));
+    }
+
+    /**
+     * Returns if the mappings or preselects are applied when the swatches are rendered.
+     *
+     * This is true, unless an observer of the event changes it.
+     *
+     * @param string $eventName
+     *
+     * @return bool
+     */
+    private function isInitialized(string $eventName): bool
+    {
+        $transportObject = new DataObject(
+            ['product' => $this->getProduct(), 'option' => $this->getOption(), 'result' => true]
         );
 
-        $this->eventManager->dispatch(
-            'catalog_product_option_product_init_attribute_preselects',
-            [
-                'data' => $innerTransportObject
-            ]
-        );
+        $this->eventManager->dispatch($eventName, ['data' => $transportObject]);
 
-        return $innerTransportObject->getData('result');
+        return (bool)$transportObject->getData('result');
+    }
+
+    /**
+     * Returns Magento's swatch renderer for the product of the option, null if the option has no product.
+     *
+     * @return Configurable|null
+     */
+    private function getSwatchRenderer(): ?Configurable
+    {
+        $product = $this->getProduct();
+
+        if ($product === null) {
+            return null;
+        }
+
+        $key = $this->variables->stringValueOrDefault($this->getOption()->getId());
+
+        if (! isset($this->swatchRenderers[ $key ])) {
+            $renderer = $this->swatchRendererFactory->create();
+
+            $renderer->setProduct($product);
+
+            $this->swatchRenderers[ $key ] = $renderer;
+        }
+
+        return $this->swatchRenderers[ $key ];
     }
 }

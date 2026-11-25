@@ -1,0 +1,7 @@
+"Attribute Option Mapping (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)", "Koppeling van attribuutopties (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)"
+"Attribute Option Preselect", "Voorselectie van attribuutopties"
+"Product", "Product"
+"Product Code", "Productcode"
+"The selected product of the option ""%1"" is not available.", "Het geselecteerde product van de optie ""%1"" is niet beschikbaar."
+"Unattached", "Niet gekoppeld"
+"We can't add the product to the cart because of an option validation issue.", "Het product kan niet aan de winkelwagen worden toegevoegd vanwege een fout bij de controle van de opties."

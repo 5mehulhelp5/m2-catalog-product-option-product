@@ -1,0 +1,7 @@
+"Attribute Option Mapping (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)", "Відповідність варіантів атрибутів (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)"
+"Attribute Option Preselect", "Попередній вибір варіантів атрибутів"
+"Product", "Товар"
+"Product Code", "Код товару"
+"The selected product of the option ""%1"" is not available.", "Вибраний товар опції «%1» недоступний."
+"Unattached", "Не прив'язано"
+"We can't add the product to the cart because of an option validation issue.", "Не вдалося додати товар до кошика через помилку перевірки опцій."

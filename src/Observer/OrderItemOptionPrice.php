@@ -2,95 +2,82 @@
 
 declare(strict_types=1);
 
+/**
+ * @author      Andreas Knollmann
+ * @copyright   Copyright (c) 2014-2026 Softwareentwicklung Andreas Knollmann
+ * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ */
+
 namespace Infrangible\CatalogProductOptionProduct\Observer;
 
-use Exception;
 use FeWeDev\Base\Arrays;
 use Infrangible\CatalogProductOptionProduct\Helper\Data;
-use Infrangible\Core\Helper\Product;
-use Magento\Catalog\Model\Product\Option;
-use Magento\ConfigurableProduct\Model\Product\Type\Configurable;
+use Magento\Catalog\Helper\Data as CatalogHelper;
 use Magento\Framework\DataObject;
 use Magento\Framework\Event\Observer;
 use Magento\Framework\Event\ObserverInterface;
 use Magento\Sales\Model\Order\Item;
 
 /**
- * @author      Andreas Knollmann
- * @copyright   2014-2025 Softwareentwicklung Andreas Knollmann
- * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ * Sets the price of unattached options with a product in the prices of the order item options.
+ *
+ * This is the event "order_item_option_price" of Infrangible Catalog Product Option Price. The price is the price of
+ * the selected product including its tax; attached options already have their price there.
  */
 class OrderItemOptionPrice implements ObserverInterface
 {
-    /** @var Arrays */
-    protected $arrays;
-
-    /** @var Data */
-    protected $helper;
-
-    /** @var Product */
-    protected $productHelper;
-
-    public function __construct(Arrays $arrays, Data $helper, Product $productHelper)
-    {
-        $this->arrays = $arrays;
-        $this->helper = $helper;
-        $this->productHelper = $productHelper;
+    /**
+     * @param Arrays $arrays
+     * @param Data $helper
+     * @param CatalogHelper $catalogHelper
+     */
+    public function __construct(
+        protected Arrays $arrays,
+        protected Data $helper,
+        protected CatalogHelper $catalogHelper
+    ) {
     }
 
     /**
-     * @throws Exception
+     * Sets the price.
+     *
+     * @param Observer $observer
+     *
+     * @return void
      */
-    public function execute(Observer $observer)
+    public function execute(Observer $observer): void
     {
-        /** @var DataObject $transportObject */
         $transportObject = $observer->getData('data');
 
-        $itemProductOptionData = $transportObject->getData('item_product_option_data');
-
-        $optionType = $this->arrays->getValue(
-            $itemProductOptionData,
-            'option_type'
-        );
-
-        if ($optionType === 'product') {
-            /** @var Item $item */
-            $item = $transportObject->getData('item');
-
-            $product = $item->getParentItem() ? $item->getParentItem()->getProduct() : $item->getProduct();
-
-            $optionId = $this->arrays->getValue(
-                $itemProductOptionData,
-                'option_id'
-            );
-
-            /** @var Option $productOption */
-            $productOption = $product->getOptionById($optionId);
-
-            if ($productOption->getData('option_product_unattached')) {
-                $price = $this->helper->getOptionPrice($productOption);
-
-                $optionProduct = $this->helper->getOptionProduct($productOption);
-
-                if ($optionProduct->getTypeId() === Configurable::TYPE_CODE) {
-                    $optionValue = $this->arrays->getValue(
-                        $itemProductOptionData,
-                        'option_value'
-                    );
-
-                    foreach ($this->productHelper->getUsedProducts($optionProduct) as $usedProduct) {
-                        if ($usedProduct->getId() == $optionValue) {
-                            $price = $usedProduct->getFinalPrice();
-                            break;
-                        }
-                    }
-                }
-
-                $transportObject->setData(
-                    'price',
-                    $price
-                );
-            }
+        if (! $transportObject instanceof DataObject) {
+            return;
         }
+
+        $optionData = $transportObject->getData('item_product_option_data');
+        $item = $transportObject->getData('item');
+
+        if (! is_array($optionData) || ! $item instanceof Item ||
+            $this->arrays->getValue($optionData, 'option_type') !== Data::OPTION_TYPE) {
+
+            return;
+        }
+
+        $parentItem = $item->getParentItem();
+        $product = $parentItem instanceof Item ? $parentItem->getProduct() : $item->getProduct();
+        $option = $product === null ? null :
+            $this->helper->getProductOption($product, $this->arrays->getValue($optionData, 'option_id'));
+
+        if ($option === null || ! $this->helper->isUnattached($option)) {
+            return;
+        }
+
+        $value = $this->arrays->getValue($optionData, 'option_value');
+        $price = $this->helper->getSelectedPrice($option, $value);
+        $taxProduct = $this->helper->getSelectedProduct($option, $value) ?? $this->helper->getOptionProduct($option);
+
+        $transportObject->setData(
+            'price',
+            $taxProduct === null ? $price : $this->catalogHelper->getTaxPrice($taxProduct, $price, true)
+        );
     }
 }

@@ -1,0 +1,7 @@
+"Attribute Option Mapping (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)", "Tilordning av attributtalternativer (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)"
+"Attribute Option Preselect", "Forhåndsvalg av attributtalternativer"
+"Product", "Produkt"
+"Product Code", "Produktkode"
+"The selected product of the option ""%1"" is not available.", "Det valgte produktet for alternativet «%1» er ikke tilgjengelig."
+"Unattached", "Ikke tilknyttet"
+"We can't add the product to the cart because of an option validation issue.", "Produktet kan ikke legges i handlekurven på grunn av en feil ved valideringen av alternativene."

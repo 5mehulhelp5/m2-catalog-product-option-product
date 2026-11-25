@@ -2,98 +2,95 @@
 
 declare(strict_types=1);
 
+/**
+ * @author      Andreas Knollmann
+ * @copyright   Copyright (c) 2014-2026 Softwareentwicklung Andreas Knollmann
+ * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ */
+
 use Infrangible\CatalogProductOptionProduct\Block\Product\View\Options\Type\Product;
 use Magento\ConfigurableProduct\Model\Product\Type\Configurable;
 use Magento\Framework\Escaper;
 
-/**
- * @author      Andreas Knollmann
- * @copyright   Copyright (c) 2014-2025 Softwareentwicklung Andreas Knollmann
- * @license     http://www.opensource.org/licenses/mit-license.php MIT
- */
-
 /** @var Product $block */
 /** @var Escaper $escaper */
-?>
 
-<?php
 $option = $block->getOption();
-$optionId = $option->getId();
-$configValue = $block->getPreconfiguredValue($option);
-$checked = is_array($configValue) && in_array($optionId, $configValue) ? 'checked' : '';
-$class = $option->getIsRequire() ? ' required' : '';
-$dataSelector = 'options[' . $optionId . ']';
-$price = $option->getPrice();
 $product = $block->getProduct();
-?>
 
-<?php if ($product && $product->getId()): ?>
-    <div class="field<?= /* @noEscape */ $class ?>">
-        <label class="label" for="select_<?= $escaper->escapeHtmlAttr($optionId); ?>">
-            <span><?= $escaper->escapeHtml($option->getTitle()); ?></span>
-        </label>
-        <div class="control">
-            <input type="hidden"
-                   name="options[<?= $escaper->escapeHtmlAttr($optionId); ?>]"
-                   id="options_<?= $escaper->escapeHtmlAttr($optionId); ?>"
-                   value="<?= $checked ? $escaper->escapeHtmlAttr($option->getData('option_product_id')) : 0 ?>">
-            <?php if ($product->getTypeId() === Configurable::TYPE_CODE): ?>
-                <?php $productId = $product->getId(); ?>
-                <input type="checkbox"
-                       class="checkbox admin__control-checkbox <?= $option->getIsRequire() ? 'required': ''; ?> product-custom-option product-custom-option-configurable"
-                       name="checkbox_options[<?= $escaper->escapeHtmlAttr($optionId); ?>]"
-                       id="checkbox_options_<?= $escaper->escapeHtmlAttr($optionId); ?>"
-                       value="<?= $escaper->escapeHtmlAttr($option->getData('option_product_id')); ?>"
-                       <?= $checked; ?>
-                />
-                <div class="swatch-opt-<?= $escaper->escapeHtmlAttr($productId); ?>" data-role="swatch-option-<?= $escaper->escapeJs($optionId); ?>-<?= $escaper->escapeHtmlAttr($productId); ?>"></div>
-                <script type="text/x-magento-init">
-                    {
-                        "[data-role=swatch-option-<?= $escaper->escapeJs($optionId); ?>-<?= $escaper->escapeJs($productId); ?>]": {
-                            "productOptionSwatches": {
-                                "selectorProduct": ".product-item-details",
-                                "onlySwatches": false,
-                                "enableControlLabel": true,
-                                "numberToShow": <?=  $escaper->escapeJs($block->getNumberSwatchesPerProduct()); ?>,
-                                "jsonConfig": <?= /* @noEscape */ $block->getJsonConfig(); ?>,
-                                "jsonSwatchConfig": <?= /* @noEscape */ $block->getJsonSwatchConfig(); ?>,
-                                "mediaCallback": "<?= $escaper->escapeJs($escaper->escapeUrl($block->getMediaCallback())); ?>",
-                                "jsonSwatchImageSizeConfig": <?= /* @noEscape */ $block->getJsonSwatchSizeConfig(); ?>,
-                                "showTooltip": <?= /* @noEscape */ $block->getShowSwatchTooltip(); ?>
-                            }
+if ($product === null) {
+    return;
+}
+
+$optionId = (string)$option->getId();
+$productId = (string)$product->getId();
+$checked = $block->isPreconfigured($option);
+$value = $checked ? (string)$block->getPreconfiguredValue($option) : '0';
+$required = (bool)$option->getIsRequire();
+$price = $block->getOptionPrice();
+$checkboxId = 'checkbox_options_' . $optionId;
+$checkboxClass = 'checkbox admin__control-checkbox' . ($required ? ' required' : '') . ' product-custom-option';
+$checkboxInit = [
+    'Infrangible_CatalogProductOptionProduct/js/option-checkbox' => ['target' => '#options_' . $optionId]
+];
+?>
+<div class="field<?= $required ? ' required' : '' ?>">
+    <label class="label" for="<?= $escaper->escapeHtmlAttr($checkboxId) ?>">
+        <span><?= $escaper->escapeHtml($option->getTitle()) ?></span>
+    </label>
+    <div class="control">
+        <input type="hidden"
+               name="options[<?= $escaper->escapeHtmlAttr($optionId) ?>]"
+               id="options_<?= $escaper->escapeHtmlAttr($optionId) ?>"
+               value="<?= $escaper->escapeHtmlAttr($value) ?>">
+        <?php if ($product->getTypeId() === Configurable::TYPE_CODE): ?>
+            <?php $swatchRole = 'swatch-option-' . $optionId . '-' . $productId; ?>
+            <?php $mediaCallback = $escaper->escapeJs($escaper->escapeUrl($block->getMediaCallback())); ?>
+            <input type="checkbox"
+                   class="<?= $escaper->escapeHtmlAttr($checkboxClass) ?> product-custom-option-configurable"
+                   name="checkbox_options[<?= $escaper->escapeHtmlAttr($optionId) ?>]"
+                   id="<?= $escaper->escapeHtmlAttr($checkboxId) ?>"
+                   value="<?= $escaper->escapeHtmlAttr($checked ? $value : $productId) ?>"
+                   data-mage-init="<?= $escaper->escapeHtmlAttr((string)json_encode($checkboxInit)) ?>"
+                   <?= $checked ? 'checked' : '' ?>>
+            <div class="swatch-opt-<?= $escaper->escapeHtmlAttr($productId) ?>"
+                 data-role="<?= $escaper->escapeHtmlAttr($swatchRole) ?>"></div>
+            <script type="text/x-magento-init">
+                {
+                    "[data-role=<?= $escaper->escapeJs($swatchRole) ?>]": {
+                        "productOptionSwatches": {
+                            "selectorProduct": ".product-item-details",
+                            "onlySwatches": false,
+                            "enableControlLabel": true,
+                            "numberToShow": <?= (int)$block->getNumberSwatchesPerProduct() ?>,
+                            "jsonConfig": <?= /* @noEscape */ $block->getJsonConfig() ?>,
+                            "jsonSwatchConfig": <?= /* @noEscape */ $block->getJsonSwatchConfig() ?>,
+                            "mediaCallback": "<?= /* @noEscape */ $mediaCallback ?>",
+                            "jsonSwatchImageSizeConfig": <?= /* @noEscape */ $block->getJsonSwatchSizeConfig() ?>,
+                            "showTooltip": <?= (int)$block->getShowSwatchTooltip() ?>
                         }
                     }
-                </script>
-            <?php else: ?>
-                <div class="field choice admin__field admin__field-option">
-                    <input type="checkbox"
-                           class="checkbox admin__control-checkbox <?= $option->getIsRequire() ? 'required': ''; ?> product-custom-option"
-                           name="checkbox_options[<?= $escaper->escapeHtmlAttr($optionId); ?>]"
-                           id="checkbox_options_<?= $escaper->escapeHtmlAttr($optionId); ?>"
-                           value="<?= $escaper->escapeHtmlAttr($option->getData('option_product_id')); ?>"
-                           <?= $checked; ?>
-                           data-selector="<?= $escaper->escapeHtmlAttr($dataSelector); ?>"
-                           price="<?= $escaper->escapeHtmlAttr($block->getCurrencyByStore($price)); ?>"
-                    />
-                    <label class="label admin__field-label"
-                           for="checkbox_options_<?= $escaper->escapeHtmlAttr($optionId); ?>">
-                        <span>
-                            <?= $escaper->escapeHtml($product->getName()); ?>
-                        </span>
-                        <?= /* @noEscape */ $block->formatPrice($price); ?>
-                    </label>
-                </div>
-                <?php if ($option->getIsRequire()): ?>
-                    <span id="options-<?= $escaper->escapeHtmlAttr($optionId); ?>-container"></span>
-                <?php endif; ?>
-            <?php endif; ?>
-            <script type="text/javascript">
-                require(['jquery', 'domReady!'], function($) {
-                    $("#checkbox_options_<?= $escaper->escapeHtmlAttr($optionId); ?>").on('change', function() {
-                        $("#options_<?= $escaper->escapeHtmlAttr($optionId); ?>").val($(this).is(':checked') ? $(this).val() : 0);
-                    });
-                });
+                }
             </script>
-        </div>
+        <?php else: ?>
+            <div class="field choice admin__field admin__field-option">
+                <input type="checkbox"
+                       class="<?= $escaper->escapeHtmlAttr($checkboxClass) ?>"
+                       name="checkbox_options[<?= $escaper->escapeHtmlAttr($optionId) ?>]"
+                       id="<?= $escaper->escapeHtmlAttr($checkboxId) ?>"
+                       value="<?= $escaper->escapeHtmlAttr($productId) ?>"
+                       data-selector="options[<?= $escaper->escapeHtmlAttr($optionId) ?>]"
+                       data-price="<?= $escaper->escapeHtmlAttr((string)$block->getCurrencyByStore($price)) ?>"
+                       data-mage-init="<?= $escaper->escapeHtmlAttr((string)json_encode($checkboxInit)) ?>"
+                       <?= $checked ? 'checked' : '' ?>>
+                <label class="label admin__field-label" for="<?= $escaper->escapeHtmlAttr($checkboxId) ?>">
+                    <span><?= $escaper->escapeHtml($product->getName()) ?></span>
+                    <?= /* @noEscape */ $block->formatPrice($price) ?>
+                </label>
+            </div>
+            <?php if ($required): ?>
+                <span id="options-<?= $escaper->escapeHtmlAttr($optionId) ?>-container"></span>
+            <?php endif; ?>
+        <?php endif; ?>
     </div>
-<?php endif; ?>
+</div>

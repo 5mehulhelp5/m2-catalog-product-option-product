@@ -2,18 +2,24 @@
 
 declare(strict_types=1);
 
+/**
+ * @author      Andreas Knollmann
+ * @copyright   Copyright (c) 2014-2026 Softwareentwicklung Andreas Knollmann
+ * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ */
+
 namespace Infrangible\CatalogProductOptionProduct\Plugin\Catalog\Ui\DataProvider\Product\Form\Modifier;
 
 use FeWeDev\Base\Arrays;
+use Infrangible\CatalogProductOptionProduct\Helper\Data;
+use Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions as Modifier;
 use Magento\Ui\Component\Form\Element\Checkbox;
 use Magento\Ui\Component\Form\Element\DataType\Text;
 use Magento\Ui\Component\Form\Element\Input;
 use Magento\Ui\Component\Form\Field;
 
 /**
- * @author      Andreas Knollmann
- * @copyright   2014-2025 Softwareentwicklung Andreas Knollmann
- * @license     http://www.opensource.org/licenses/mit-license.php MIT
+ * Adds the option type "Product" and its fields to the custom options of the product form in the admin.
  */
 class CustomOptions
 {
@@ -27,170 +33,103 @@ class CustomOptions
 
     public const FIELD_OPTION_ATTRIBUTE_OPTION_PRESELECT_NAME = 'option_product_attribute_option_preselect';
 
-    /** @var Arrays */
-    protected $arrays;
-
-    public function __construct(Arrays $arrays)
+    /**
+     * @param Arrays $arrays
+     */
+    public function __construct(protected Arrays $arrays)
     {
-        $this->arrays = $arrays;
     }
 
     /**
+     * Adds the fields to the static fields of the options and the type to the types of the options.
+     *
+     * @param Modifier $subject
+     * @param array $meta
+     * @phpstan-param array<int|string, mixed> $meta
+     *
+     * @return array
+     * @phpstan-return array<int|string, mixed>
      * @noinspection PhpUnusedParameterInspection
      */
-    public function afterModifyMeta(
-        \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions $subject,
-        array $meta
-    ): array {
-        $meta = $this->arrays->addDeepValue(
-            $meta,
-            [
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GROUP_CUSTOM_OPTIONS_NAME,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GRID_OPTIONS_NAME,
-                'children',
-                'record',
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_OPTION,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_TYPE_STATIC_NAME,
-                'children',
-                self::FIELD_OPTION_PRODUCT_ID_NAME
-            ],
-            $this->getProductIdFieldConfig(110)
-        );
+    public function afterModifyMeta(Modifier $subject, array $meta): array
+    {
+        $fields = [
+            self::FIELD_OPTION_PRODUCT_ID_NAME                => $this->getFieldConfig(__('Product'), 110),
+            self::FIELD_OPTION_PRODUCT_CODE_ATTRIBUTE_NAME    => $this->getFieldConfig(__('Product Code'), 111),
+            self::FIELD_OPTION_UNATTACHED_NAME                => $this->getUnattachedFieldConfig(112),
+            self::FIELD_OPTION_ATTRIBUTE_OPTION_MAPPING_NAME  => $this->getFieldConfig(
+                __('Attribute Option Mapping (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)'),
+                113
+            ),
+            self::FIELD_OPTION_ATTRIBUTE_OPTION_PRESELECT_NAME => $this->getFieldConfig(
+                __('Attribute Option Preselect'),
+                114
+            )
+        ];
 
-        $meta = $this->arrays->addDeepValue(
-            $meta,
-            [
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GROUP_CUSTOM_OPTIONS_NAME,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GRID_OPTIONS_NAME,
-                'children',
-                'record',
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_OPTION,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_TYPE_STATIC_NAME,
-                'children',
-                self::FIELD_OPTION_PRODUCT_CODE_ATTRIBUTE_NAME
-            ],
-            $this->getProductCodeAttributeFieldConfig(111)
-        );
+        $optionPath = [
+            Modifier::GROUP_CUSTOM_OPTIONS_NAME,
+            'children',
+            Modifier::GRID_OPTIONS_NAME,
+            'children',
+            'record',
+            'children',
+            Modifier::CONTAINER_OPTION,
+            'children'
+        ];
 
-        $meta = $this->arrays->addDeepValue(
-            $meta,
-            [
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GROUP_CUSTOM_OPTIONS_NAME,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GRID_OPTIONS_NAME,
-                'children',
-                'record',
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_OPTION,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_TYPE_STATIC_NAME,
-                'children',
-                static::FIELD_OPTION_UNATTACHED_NAME
-            ],
-            $this->getUnattachedFieldConfig(112)
-        );
+        foreach ($fields as $fieldName => $fieldConfig) {
+            $fieldConfig[ 'arguments' ][ 'data' ][ 'config' ][ 'dataScope' ] = $fieldName;
 
-        $meta = $this->arrays->addDeepValue(
-            $meta,
-            [
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GROUP_CUSTOM_OPTIONS_NAME,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GRID_OPTIONS_NAME,
-                'children',
-                'record',
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_OPTION,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_TYPE_STATIC_NAME,
-                'children',
-                static::FIELD_OPTION_ATTRIBUTE_OPTION_MAPPING_NAME
-            ],
-            $this->getAttributeOptionMappingFieldConfig(113)
-        );
-
-        $meta = $this->arrays->addDeepValue(
-            $meta,
-            [
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GROUP_CUSTOM_OPTIONS_NAME,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GRID_OPTIONS_NAME,
-                'children',
-                'record',
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_OPTION,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_TYPE_STATIC_NAME,
-                'children',
-                static::FIELD_OPTION_ATTRIBUTE_OPTION_PRESELECT_NAME
-            ],
-            $this->getAttributeOptionPreselectFieldConfig(114)
-        );
+            $meta = $this->arrays->addDeepValue(
+                $meta,
+                [...$optionPath, Modifier::CONTAINER_TYPE_STATIC_NAME, 'children', $fieldName],
+                $fieldConfig
+            );
+        }
 
         return $this->arrays->addDeepValue(
             $meta,
             [
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GROUP_CUSTOM_OPTIONS_NAME,
+                ...$optionPath,
+                Modifier::CONTAINER_COMMON_NAME,
                 'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::GRID_OPTIONS_NAME,
-                'children',
-                'record',
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_OPTION,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_COMMON_NAME,
-                'children',
-                \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::FIELD_TYPE_NAME,
+                Modifier::FIELD_TYPE_NAME,
                 'arguments',
                 'data',
                 'config',
                 'groupsConfig',
-                'product'
+                Data::OPTION_TYPE
             ],
             [
-                'values'  => ['product'],
+                'values'  => [Data::OPTION_TYPE],
                 'indexes' => [
-                    \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::CONTAINER_TYPE_STATIC_NAME,
-                    \Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\CustomOptions::FIELD_SKU_NAME,
-                    CustomOptions::FIELD_OPTION_PRODUCT_ID_NAME
+                    Modifier::CONTAINER_TYPE_STATIC_NAME,
+                    Modifier::FIELD_SKU_NAME,
+                    self::FIELD_OPTION_PRODUCT_ID_NAME
                 ]
             ]
         );
     }
 
-    protected function getProductIdFieldConfig(int $sortOrder): array
+    /**
+     * Returns the configuration of a text field.
+     *
+     * @param mixed $label
+     * @param int $sortOrder
+     *
+     * @return array
+     * @phpstan-return array{arguments: array{data: array{config: array<string, mixed>}}}
+     */
+    protected function getFieldConfig(mixed $label, int $sortOrder): array
     {
         return [
             'arguments' => [
                 'data' => [
                     'config' => [
-                        'label'         => __('Product'),
+                        'label'         => $label,
                         'componentType' => Field::NAME,
                         'formElement'   => Input::NAME,
-                        'dataScope'     => static::FIELD_OPTION_PRODUCT_ID_NAME,
-                        'dataType'      => Text::NAME,
-                        'sortOrder'     => $sortOrder
-                    ],
-                ],
-            ],
-        ];
-    }
-
-    protected function getProductCodeAttributeFieldConfig(int $sortOrder): array
-    {
-        return [
-            'arguments' => [
-                'data' => [
-                    'config' => [
-                        'label'         => __('Product Code'),
-                        'componentType' => Field::NAME,
-                        'formElement'   => Input::NAME,
-                        'dataScope'     => static::FIELD_OPTION_PRODUCT_CODE_ATTRIBUTE_NAME,
                         'dataType'      => Text::NAME,
                         'sortOrder'     => $sortOrder
                     ]
@@ -199,6 +138,14 @@ class CustomOptions
         ];
     }
 
+    /**
+     * Returns the configuration of the checkbox "Unattached".
+     *
+     * @param int $sortOrder
+     *
+     * @return array
+     * @phpstan-return array{arguments: array{data: array{config: array<string, mixed>}}}
+     */
     protected function getUnattachedFieldConfig(int $sortOrder): array
     {
         return [
@@ -208,7 +155,6 @@ class CustomOptions
                         'label'         => __('Unattached'),
                         'componentType' => Field::NAME,
                         'formElement'   => Checkbox::NAME,
-                        'dataScope'     => static::FIELD_OPTION_UNATTACHED_NAME,
                         'dataType'      => Text::NAME,
                         'sortOrder'     => $sortOrder,
                         'value'         => '0',
@@ -216,42 +162,6 @@ class CustomOptions
                             'true'  => '1',
                             'false' => '0'
                         ]
-                    ]
-                ]
-            ]
-        ];
-    }
-
-    protected function getAttributeOptionMappingFieldConfig(int $sortOrder): array
-    {
-        return [
-            'arguments' => [
-                'data' => [
-                    'config' => [
-                        'label'         => __('Attribute Option Mapping (srcAttrId:srcAttrOptionId:targetAttrId:targetAttrOptionId, ...)'),
-                        'componentType' => Field::NAME,
-                        'formElement'   => Input::NAME,
-                        'dataScope'     => static::FIELD_OPTION_ATTRIBUTE_OPTION_MAPPING_NAME,
-                        'dataType'      => Text::NAME,
-                        'sortOrder'     => $sortOrder
-                    ]
-                ]
-            ]
-        ];
-    }
-
-    protected function getAttributeOptionPreselectFieldConfig(int $sortOrder): array
-    {
-        return [
-            'arguments' => [
-                'data' => [
-                    'config' => [
-                        'label'         => __('Attribute Option Preselect'),
-                        'componentType' => Field::NAME,
-                        'formElement'   => Input::NAME,
-                        'dataScope'     => static::FIELD_OPTION_ATTRIBUTE_OPTION_PRESELECT_NAME,
-                        'dataType'      => Text::NAME,
-                        'sortOrder'     => $sortOrder
                     ]
                 ]
             ]
